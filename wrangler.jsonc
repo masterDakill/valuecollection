@@ -1,34 +1,29 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "webapp",
-  "compatibility_date": "2025-10-12",
+  "name": "evaluateur-collection-pro",
+  "main": "src/index.tsx",
+  "compatibility_date": "2024-10-01",
+  "compatibility_flags": ["nodejs_compat"],
   "pages_build_output_dir": "./dist",
-  "compatibility_flags": [
-    "nodejs_compat"
-  ]
-  // "vars": {
-  //   "MY_VAR": "my-variable"
-  // },
-  // "kv_namespaces": [
-  //   {
-  //     "binding": "MY_KV_NAMESPACE",
-  //     "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  //   }
-  // ],
-  // "r2_buckets": [
-  //   {
-  //     "binding": "MY_BUCKET",
-  //     "bucket_name": "my-bucket"
-  //   }
-  // ],
+
+  // Base de données D1 pour les collections (à configurer après setup Cloudflare)
   // "d1_databases": [
   //   {
-  //     "binding": "MY_DB",
-  //     "database_name": "my-database",
-  //     "database_id": ""
+  //     "binding": "DB",
+  //     "database_name": "webapp-collections-db",
+  //     "database_id": "your-database-id-here"
   //   }
   // ],
-  // "ai": {
-  //   "binding": "AI"
-  // }
+
+  // Variables d'environnement pour les API externes
+  "vars": {
+    "ENVIRONMENT": "development"
+  }
+
+  // Secrets à configurer via wrangler secret put :
+  // - EBAY_API_KEY : Clé API eBay pour recherche de prix
+  // - WORTHPOINT_API_KEY : Clé WorthPoint pour évaluations
+  // - OPENAI_API_KEY : Pour l'analyse d'images IA
+  // - GOOGLE_BOOKS_API_KEY : Pour évaluation des livres
+  // - SPORTSCARDSPRO_API_KEY : Pour cartes de sport
 }
