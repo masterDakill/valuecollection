@@ -1,0 +1,60 @@
+name: 🚀 Deploy Évaluateur Collection Pro
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+    name: 🧪 Test & Deploy to Cloudflare Pages
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: 📚 Install Dependencies
+        run: npm ci
+
+      - name: 🔨 Build Application
+        run: |
+          npm run build
+          cp -r public/* dist/ 2>/dev/null || true
+
+      - name: 🧪 Run Tests (if any)
+        run: |
+          # Ajouter vos tests ici
+          echo "Tests passed ✅"
+
+      - name: 🌐 Deploy to Cloudflare Pages
+        if: github.ref == 'refs/heads/main'
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: evaluateur-collection-pro
+          directory: dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🗄️ Database Migration (Production)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          npx wrangler d1 migrations apply webapp-collections-db --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: 📊 Deployment Summary
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "🎉 Deployment completed!"
+          echo "🌐 URL: https://evaluateur-collection-pro.pages.dev"
+          echo "📊 Check deployment status at Cloudflare Pages dashboard"

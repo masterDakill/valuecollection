@@ -17,8 +17,11 @@ node_modules/
 
 # env
 .env
-.env.production
+.env.*
 .dev.vars
+
+# GitHub tokens (CRITIQUE: Ne jamais committer)
+.env.github
 
 # logs
 logs/
