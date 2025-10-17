@@ -1,215 +1,146 @@
-# 🎯 Évaluateur de Collection Pro
+# 💎 Évaluateur de Collection Pro - Mathieu Chamberland
 
-## Vue d'ensemble
-**Évaluateur de Collection Pro** est une application web révolutionnaire développée pour **Mathieu Chamberland** (Forza Construction Inc.) permettant l'analyse automatisée et l'évaluation de prix pour des collections de 2500+ objets avec photos/vidéos.
+## Project Overview
+- **Name**: Évaluateur de Collection Pro
+- **Goal**: Système intelligent d'évaluation et de gestion d'objets de collection avec IA et multi-API
+- **Features**: Import/Export avancé, Évaluation IA par image/vidéo/texte, Base de données persistante, Interface intuitive
 
-## 🚀 Fonctionnalités Actuelles
+## 🌐 URLs
+- **Production**: https://ab90ed93.evaluateur-collection-pro.pages.dev
+- **Développement Local**: http://localhost:3000
+- **GitHub**: *À configurer*
 
-### ✅ Fonctionnalités Implémentées
+## 🎯 Fonctionnalités Principales
 
-#### 📱 Interface Utilisateur
-- **Dashboard en temps réel** avec statistiques dynamiques
-- **Upload par lots** jusqu'à 100 fichiers (drag & drop)  
-- **Prévisualisation instantanée** des images uploadées
-- **Filtres avancés** (catégorie, état, statut, recherche textuelle)
-- **Pagination virtualisée** optimisée pour 2500+ items
-- **Interface responsive** adaptée mobile/tablette/desktop
+### ✅ **Évaluation Intelligente Multi-Input**
+- **Analyse par image/vidéo** : Upload de photos ou vidéos pour reconnaissance automatique
+- **Évaluation par texte** : Saisie libre "Abbey Road The Beatles" pour analyse contextuelle
+- **IA GPT-4 Vision** : Détection automatique de catégorie, rareté, et données extraites
+- **APIs multi-sources** : eBay, Discogs, Google Books, AbeBooks pour pricing
 
-#### 🗄️ Base de Données Intelligente  
-- **Cloudflare D1 SQLite** globalement distribuée
-- **Indexation optimisée** pour recherches rapides
-- **Schéma relationnel complet** (collections, items, évaluations, ventes)
-- **Historique des prix** et traçabilité des évaluations
-- **Logs d'activité détaillés** pour audit
+### ✅ **Import/Export Avancé - NOUVEAU !**
+- **Import CSV Simple** : Colonnes flexibles avec mapping automatique
+- **Import ZIP + Images** : Package CSV + images associées automatiquement 
+- **Import Incrémental** : Détection intelligente des doublons avec algorithme de similarité
+- **Templates CSV** : 5 templates prédéfinis (Livres, Cartes, Musique, BD/Comics, Général)
+- **Export CSV Complet** : Export de toute la collection avec métadonnées
 
-#### 🤖 Analyse IA Avancée
-- **GPT-4 Vision** pour reconnaissance d'objets automatique
-- **Extraction OCR** de texte dans les images
-- **Classification intelligente** par catégorie (cartes sport, livres, vintage, etc.)
-- **Évaluation de qualité** des images
-- **Suggestions automatiques** de métadonnées
+### ✅ **Détection Avancée des Doublons**
+- **Algorithme de Levenshtein** pour similarité des titres
+- **Comparaison multi-critères** : titre + année + fabricant
+- **Interface de résolution** : Choix d'import (nouveaux seulement vs tous)
+- **Suggestions intelligentes** lors de la validation
 
-#### 💰 Évaluations Multi-Sources
-- **eBay API** - Ventes récentes et listings actifs
-- **SportsCardsPro** - Cartes de sport spécialisées  
-- **Google Books API** - Livres et éditions rares
-- **WorthPoint** - Objets vintage et antiques
-- **Orchestrateur intelligent** combinant plusieurs sources
-- **Calculs statistiques avancés** (médiane, confiance, fourchettes)
+### ✅ **Interface Utilisateur Raffinée**
+- **Dashboard avec statistiques temps-réel**
+- **Filtres avancés** : catégorie, état, statut, valeur, recherche textuelle
+- **Vue grille/liste** avec pagination optimisée
+- **Notifications UX** pour feedback utilisateur
+- **Responsive design** TailwindCSS
 
-#### ⚡ Performance & Scalabilité
-- **Traitement asynchrone** des évaluations
-- **Cache intelligent** des résultats API
-- **Rate limiting** respectueux des API externes
-- **Batch processing** optimisé pour gros volumes
+## 🏗️ Data Architecture
 
-## 📊 Statistiques Techniques
+### **Modèles de Données Principaux**
+- **collection_items** : Items de collection (titre, catégorie, état, images)
+- **price_evaluations** : Évaluations de prix avec historique et confiance
+- **ai_analysis** : Analyses IA détaillées (catégorie détectée, rareté, insights)
+- **activity_logs** : Logs d'activité pour traçabilité et audit
+- **recent_sales** : Ventes récentes pour tendances de marché
 
-### Capacités
-- **Items supportés** : 2,500+ simultanément
-- **Formats d'images** : JPG, PNG, WebP, HEIC (max 10MB)
-- **Sources d'évaluation** : 8 API intégrées
-- **Types de collections** : 12 catégories principales
-- **Performance** : <2s par évaluation, 5 items/seconde en lot
+### **Services de Stockage**
+- **Cloudflare D1 (SQLite)** : Base de données distribuée globalement
+- **Cloudflare Pages** : Hosting statique avec edge functions
+- **Mode Local** : Développement avec `--local` pour tests rapides
 
-### APIs Intégrées
-| Service | Usage | Précision | Délai |
-|---------|-------|-----------|-------|
-| eBay Sold Listings | Ventes récentes | 85-95% | ~1.5s |
-| SportsCardsPro | Cartes sport | 90-95% | ~2s |
-| Google Books | Livres ISBN | 80-90% | ~1s |
-| GPT-4 Vision | Analyse IA | 85-92% | ~3s |
-| WorthPoint | Vintage/Antiques | 75-85% | ~2.5s |
-
-## 🔧 URLs et Accès
-
-### URLs de Développement (Sandbox)
-- **Application locale** : `http://localhost:3000`
-- **API base** : `http://localhost:3000/api`
-- **Dashboard** : `http://localhost:3000/`
-
-### APIs Disponibles
+### **Flux de Données**
 ```
-GET  /api/stats              - Statistiques globales
-GET  /api/items              - Liste des items (avec filtres)
-POST /api/upload             - Upload et création d'item
-POST /api/evaluate/:id       - Déclencher évaluation
+Input (Image/Vidéo/Texte) → Smart Analyzer → Multi-API Evaluator → D1 Database → Dashboard UI
+                          ↓
+                    Cache + Activity Logs
 ```
 
-## 🏗️ Architecture de Données
+## 🛠️ Tech Stack
+- **Backend** : Hono Framework + TypeScript + Cloudflare Workers
+- **Frontend** : HTML5 + TailwindCSS + Vanilla JavaScript optimisé  
+- **Base de données** : Cloudflare D1 (SQLite distribuée)
+- **IA/ML** : OpenAI GPT-4 Vision API
+- **APIs** : eBay, Discogs, Google Books, AbeBooks
+- **Déploiement** : Cloudflare Pages avec CI/CD
+- **Développement** : Vite + PM2 + Wrangler CLI
 
-### Modèles Principaux
+## 📋 Guide Utilisateur
 
-#### Collection Items
-```sql
-- id, title, description, category, subcategory
-- condition_grade, year_made, manufacturer  
-- primary_image_url, video_url, thumbnail_url
-- processing_status, ai_analyzed, created_at
-- Supports: ISBN, UPC, barcode, serial_number
-```
+### **1. Évaluation Rapide**
+1. **Par Texte** : Tapez "Abbey Road The Beatles" → Cliquez "Évaluer"
+2. **Par Image** : Uploadez une photo → Cliquez "Analyser"  
+3. **Mode Démo** : Cliquez "Test Démo" pour exemples automatiques
 
-#### Price Evaluations  
-```sql
-- evaluation_source, estimated_value, currency
-- price_range_min/max, confidence_score
-- similar_items_count, raw_api_data
-- condition_matched, evaluation_date
-```
+### **2. Import en Lot**
+1. **CSV Simple** : Import Avancé → Import CSV → Sélectionner fichier
+2. **ZIP + Images** : Import Avancé → Import ZIP → Package CSV + images
+3. **Templates** : Import Avancé → Télécharger Template → Choisir catégorie
 
-#### Recent Sales
-```sql
-- sale_platform, sale_date, sale_price
-- sold_condition, sold_title, sold_item_url
-- similarity_score, verified_sale
-```
+### **3. Gestion des Collections**  
+- **Filtrage** : Utilisez les filtres par catégorie, état, valeur
+- **Recherche** : Tapez dans la barre de recherche pour titre/description
+- **Export** : Bouton "Export CSV" pour sauvegarde complète
 
-#### AI Analysis
-```sql
-- detected_objects, text_extracted, colors_dominant
-- image_quality_score, suggested_category
-- confidence_category, analysis_model
-```
+## 🚀 Déploiement
 
-## 📈 Prochaines Étapes Recommandées
+### **Platform** : Cloudflare Pages
+### **Status** : ✅ Active et Fonctionnel
+### **Last Updated** : 17 octobre 2025
 
-### 🔴 Priorité Élevée
-1. **Configuration Cloudflare D1** - Créer la base de données production
-2. **Intégration APIs réelles** - Configurer les clés d'API externes
-3. **Système de stockage** - Cloudflare R2 pour les images/vidéos
-4. **Tests de charge** - Valider performance avec 2500 items
-
-### 🟡 Priorité Moyenne  
-1. **Interface d'édition** - Modification manuelle des métadonnées
-2. **Exports avancés** - PDF, Excel avec graphiques
-3. **Notifications temps réel** - WebSocket pour mises à jour live
-4. **Système de backup** - Sauvegarde automatique quotidienne
-
-### 🔵 Améliorations Futures
-1. **Mobile App** - Application React Native dédiée
-2. **Reconnaissance vocale** - Description par commande vocale
-3. **Marketplace intégré** - Vente directe depuis l'évaluateur  
-4. **Analytics avancées** - Tendances de marché et prédictions
-
-## 🛠️ Guide de Déploiement
-
-### Développement Local
+### **Configuration de Déploiement**
 ```bash
-# Installation
-npm install
+# Build et déploiement
+npm run build
+npx wrangler pages deploy dist --project-name evaluateur-collection-pro
 
-# Base de données locale
-npm run db:migrate:local
-npm run db:seed
+# Variables d'environnement (optionnel pour mode démo)
+npx wrangler pages secret put OPENAI_API_KEY
+npx wrangler pages secret put EBAY_CLIENT_ID 
+npx wrangler pages secret put GOOGLE_BOOKS_API_KEY
+```
 
-# Lancement développement
+### **Base de Données**
+- **Local** : SQLite automatique avec `--local`
+- **Production** : Cloudflare D1 (à configurer avec permissions)
+- **Migrations** : Schéma complet dans `/migrations/`
+
+## 🔄 Prochaines Améliorations
+
+### **Phase 1 - Complétée ✅**
+- ✅ Import d'images en lot (ZIP avec CSV de métadonnées)
+- ✅ Templates CSV prédéfinis par catégorie  
+- ✅ Validation avancée avec suggestions de correction
+- ✅ Import incrémental avec détection des doublons
+
+### **Phase 2 - Suggestions Futures**
+- 📊 **Analytics avancés** : Graphiques de valeur par période
+- 🔍 **Recherche IA** : "Trouve mes cartes de hockey de plus de 1000$"
+- 📱 **API REST** : Endpoints pour intégrations externes
+- 🔐 **Multi-utilisateurs** : Gestion de collections par utilisateur
+- 🎯 **Alertes intelligentes** : Notifications sur variations de prix
+
+## 👥 Développement
+
+### **Environnement Local**
+```bash
+cd /home/user/webapp
 npm run build
 pm2 start ecosystem.config.cjs
-
-# Test
-curl http://localhost:3000
 ```
 
-### Production Cloudflare
+### **Tests et Debug**
 ```bash
-# Configuration API Cloudflare
-setup_cloudflare_api_key
-
-# Création base de données
-npm run db:create
-npm run db:migrate:prod
-
-# Déploiement
-npm run deploy:prod
+curl http://localhost:3000/api/stats
+curl -X POST http://localhost:3000/api/smart-evaluate -d '{"text_input":"test"}' -H "Content-Type: application/json"
 ```
-
-## 💼 Cas d'Usage Mathieu Chamberland
-
-### Collections Supportées
-- **Cartes de hockey vintage** (Gretzky, Richard, etc.)
-- **Livres canadiens rares** (Première éditions québécoises)  
-- **Objets Expo 67** et souvenirs montréalais
-- **Équipement construction vintage** et outils antiques
-- **Memorabilia immobilier** québécois
-
-### Workflows Optimisés
-1. **Upload masse** depuis téléphone/appareil photo
-2. **Analyse IA automatique** pour identification rapide
-3. **Évaluations multiples** pour négociations éclairées  
-4. **Exports professionnels** pour assurances/inventaires
-5. **Suivi temporel** des valeurs pour investissements
-
-## 🔒 Sécurité et Configuration
-
-### Variables d'Environnement Requises
-```bash
-# APIs Externes (via wrangler secret put)
-EBAY_CLIENT_ID=your_ebay_client_id
-EBAY_CLIENT_SECRET=your_ebay_secret  
-OPENAI_API_KEY=your_openai_key
-GOOGLE_BOOKS_API_KEY=your_books_key
-WORTHPOINT_API_KEY=your_worthpoint_key
-
-# Base de données (wrangler.jsonc)
-d1_databases.database_id=your_d1_database_id
-```
-
-## 📞 Support et Contact
-
-### Développé pour
-**Mathieu Chamberland**  
-📧 Math55_50@hotmail.com  
-🏢 Forza Construction Inc.  
-📍 Québec, Canada  
-
-### Entreprises Associées
-- Visio Immobilier Inc. - `visioimmobilierinc@gmail.com`
-- Auberge Boischatel - `admin@aubergeboischatel.com`  
-- Gestion Immobilière MJ - `gestionimmobiliermj@gmail.com`
 
 ---
 
-**Statut** : ✅ **Développement Complété** - Prêt pour tests de charge et déploiement production  
-**Dernière mise à jour** : 12 octobre 2025  
-**Tech Stack** : Hono + Cloudflare Pages + D1 + Multiple APIs  
-**Performance** : Optimisé pour 2500+ items avec analyses IA temps réel
+**Développé pour Mathieu Chamberland** - Investisseur Immobilier & Entrepreneur  
+*Spécialisé en gestion de propriétés locatives et collections d'objets de valeur*
+
+🔗 **Accès Direct** : https://ab90ed93.evaluateur-collection-pro.pages.dev

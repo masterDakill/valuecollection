@@ -24,6 +24,8 @@ class CollectionEvaluator {
     document.getElementById('dropZone').addEventListener('click', () => document.getElementById('fileInput').click());
     document.getElementById('clearFiles').addEventListener('click', () => this.clearFiles());
     document.getElementById('startUpload').addEventListener('click', () => this.startBatchUpload());
+    document.getElementById('quickEvalBtn').addEventListener('click', () => this.quickEvaluate());
+    document.getElementById('testSmartEval').addEventListener('click', () => this.testSmartEvaluation());
 
     // Filtres
     document.getElementById('applyFilters').addEventListener('click', () => this.applyFilters());
@@ -222,7 +224,10 @@ class CollectionEvaluator {
     // Extraire métadonnées du nom de fichier
     const metadata = this.extractMetadataFromFilename(file.name);
     
-    // Créer l'item en base
+    // Détecter si c'est une vidéo
+    const isVideo = file.type.startsWith('video/');
+    
+    // Upload intelligent avec analyse automatique
     const response = await axios.post('/api/upload', {
       title: metadata.title,
       description: metadata.description,
@@ -230,17 +235,19 @@ class CollectionEvaluator {
       condition_grade: metadata.condition,
       year_made: metadata.year,
       manufacturer: metadata.manufacturer,
-      image_url: imageUrl
+      image_url: isVideo ? null : imageUrl,
+      video_url: isVideo ? imageUrl : null,
+      text_input: metadata.searchText, // Texte libre extrait
+      filename: file.name,
+      auto_evaluate: true  // Évaluation intelligente automatique
     });
 
     if (!response.data.success) {
       throw new Error(response.data.error);
     }
 
-    // Déclencher évaluation automatique
-    setTimeout(() => {
-      this.evaluateItem(response.data.item_id);
-    }, 1000);
+    // L'évaluation est maintenant automatique et intégrée
+    console.log('✅ Upload avec évaluation intelligente:', response.data.evaluation_result);
 
     return response.data;
   }
@@ -256,16 +263,23 @@ class CollectionEvaluator {
   }
 
   extractMetadataFromFilename(filename) {
-    // Intelligence artificielle basique pour extraire info du nom de fichier
+    // Intelligence améliorée pour extraire info du nom de fichier
     const name = filename.toLowerCase().replace(/\\.[^/.]+$/, '');
     
     let category = 'other';
     let condition = 'good';
     let year = null;
     let manufacturer = '';
+    let searchText = '';
     
-    // Détection de catégorie
-    if (name.includes('card') || name.includes('carte')) {
+    // Détection de catégorie enrichie
+    if (name.includes('vinyl') || name.includes('lp') || name.includes('ep') || name.includes('45rpm')) {
+      category = 'records';
+    } else if (name.includes('cd') && !name.includes('card')) {
+      category = 'cds';
+    } else if (name.includes('dvd') || name.includes('bluray') || name.includes('blu-ray')) {
+      category = 'dvds';
+    } else if (name.includes('card') || name.includes('carte')) {
       if (name.includes('hockey') || name.includes('baseball') || name.includes('sport')) {
         category = 'sports_cards';
       } else if (name.includes('pokemon') || name.includes('magic') || name.includes('tcg')) {
@@ -275,14 +289,19 @@ class CollectionEvaluator {
       category = 'books';
     } else if (name.includes('comic') || name.includes('bd')) {
       category = 'comics';
+    } else if (name.includes('game') || name.includes('jeu')) {
+      category = 'games';
     } else if (name.includes('vintage') || name.includes('antique')) {
       category = 'vintage';
     }
 
-    // Détection d'état
-    if (name.includes('mint')) condition = 'mint';
-    else if (name.includes('excellent')) condition = 'excellent';
+    // Détection d'état enrichie
+    if (name.includes('mint') || name.includes('sealed')) condition = 'mint';
+    else if (name.includes('near mint') || name.includes('nm')) condition = 'near_mint';
+    else if (name.includes('excellent') || name.includes('vg+')) condition = 'excellent';
+    else if (name.includes('very good') || name.includes('vg')) condition = 'very_good';
     else if (name.includes('good')) condition = 'good';
+    else if (name.includes('fair') || name.includes('poor')) condition = 'fair';
 
     // Détection d'année
     const yearMatch = name.match(/(19|20)\\d{2}/);
@@ -290,8 +309,18 @@ class CollectionEvaluator {
       year = parseInt(yearMatch[0]);
     }
 
-    // Fabricants communs
-    const manufacturers = ['topps', 'upper deck', 'panini', 'opc', 'o-pee-chee', 'parkhurst'];
+    // Fabricants/labels étendus
+    const manufacturers = [
+      // Cartes
+      'topps', 'upper deck', 'panini', 'opc', 'o-pee-chee', 'parkhurst', 'bowman',
+      // Vinyles/CDs
+      'columbia', 'rca', 'atlantic', 'capitol', 'motown', 'warner', 'emi', 'universal',
+      // Livres
+      'penguin', 'vintage', 'bantam', 'del rey', 'tor', 'scholastic',
+      // Éditeurs québécois
+      'boreal', 'leméac', 'quebec amerique', 'vlb', 'fides'
+    ];
+    
     for (const mfg of manufacturers) {
       if (name.includes(mfg)) {
         manufacturer = mfg;
@@ -299,13 +328,29 @@ class CollectionEvaluator {
       }
     }
 
+    // Extraction de texte de recherche intelligent
+    searchText = name
+      .replace(/[-_]/g, ' ')
+      .replace(/\\b(cd|dvd|vinyl|lp|ep|mint|excellent|good)\\b/gi, '')
+      .replace(/\\b\\d{4}\\b/, '') // Supprimer années
+      .replace(/\\s+/g, ' ')
+      .trim();
+
+    // Patterns spéciaux pour musique (artiste - album)
+    const musicPattern = /(.*?)[-_](.*?)(?:[-_]\\d{4})?$/;
+    const musicMatch = searchText.match(musicPattern);
+    if (musicMatch && (category === 'records' || category === 'cds')) {
+      searchText = `${musicMatch[1].trim()} ${musicMatch[2].trim()}`;
+    }
+
     return {
       title: this.cleanTitle(name),
-      description: `Uploadé automatiquement depuis ${filename}`,
+      description: `Analysé automatiquement depuis ${filename}`,
       category,
       condition,
       year,
-      manufacturer
+      manufacturer,
+      searchText
     };
   }
 
@@ -627,6 +672,209 @@ class CollectionEvaluator {
     if (bytes === 0) return '0 B';
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+  }
+
+  // Évaluation rapide par texte libre
+  async quickEvaluate() {
+    const textInput = document.getElementById('quickEvalText').value.trim();
+    
+    if (!textInput) {
+      this.showNotification('Veuillez saisir un titre et auteur/artiste', 'warning');
+      return;
+    }
+
+    const btn = document.getElementById('quickEvalBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyse...';
+    btn.disabled = true;
+
+    try {
+      const response = await axios.post('/api/smart-evaluate', {
+        text_input: textInput
+      });
+
+      if (response.data.success) {
+        this.displayQuickEvalResult(response.data);
+      } else {
+        this.showNotification('Erreur lors de l\'évaluation: ' + response.data.error, 'error');
+      }
+
+    } catch (error) {
+      console.error('Erreur évaluation rapide:', error);
+      this.showNotification('Erreur de connexion lors de l\'évaluation', 'error');
+    } finally {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  }
+
+  // Test de l'évaluation intelligente avec exemples
+  async testSmartEvaluation() {
+    const examples = [
+      'Abbey Road The Beatles',
+      'Les Anciens Canadiens Philippe Aubert de Gaspé',
+      'Wayne Gretzky rookie card 1979',
+      'Pink Floyd The Wall vinyl'
+    ];
+
+    const randomExample = examples[Math.floor(Math.random() * examples.length)];
+    document.getElementById('quickEvalText').value = randomExample;
+    
+    this.showNotification(`Test avec: "${randomExample}"`, 'info');
+    await this.quickEvaluate();
+  }
+
+  // Affichage des résultats d'évaluation rapide
+  displayQuickEvalResult(result) {
+    const analysis = result.smart_analysis;
+    const evaluations = result.evaluations || [];
+    const insights = result.market_insights;
+
+    // Créer modal ou section de résultats
+    const resultModal = document.createElement('div');
+    resultModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    
+    const avgPrice = evaluations.length > 0 
+      ? evaluations.reduce((sum, e) => sum + (e.estimated_value || 0), 0) / evaluations.length
+      : 0;
+
+    const confidenceColor = result.matching_confidence > 0.8 ? 'green' : 
+                           result.matching_confidence > 0.6 ? 'yellow' : 'red';
+
+    resultModal.innerHTML = `
+      <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
+        <div class="p-6">
+          <div class="flex justify-between items-start mb-4">
+            <h3 class="text-xl font-bold text-gray-900">
+              <i class="fas fa-brain text-blue-600 mr-2"></i>
+              Évaluation Intelligente
+            </h3>
+            <button onclick="this.parentElement.parentElement.parentElement.parentElement.remove()" 
+                    class="text-gray-400 hover:text-gray-600">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+
+          <!-- Analyse principale -->
+          <div class="bg-gray-50 rounded-lg p-4 mb-4">
+            <h4 class="font-semibold mb-2">🔍 Analyse IA</h4>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div><strong>Catégorie:</strong> ${this.getCategoryLabel(analysis.category)}</div>
+              <div><strong>Confiance:</strong> 
+                <span class="text-${confidenceColor}-600 font-semibold">
+                  ${Math.round(result.matching_confidence * 100)}%
+                </span>
+              </div>
+              <div><strong>Titre:</strong> ${analysis.extracted_data.title || 'Non détecté'}</div>
+              <div><strong>Auteur/Artiste:</strong> ${analysis.extracted_data.artist_author || 'Non détecté'}</div>
+              <div><strong>Année:</strong> ${analysis.extracted_data.year || 'Non détectée'}</div>
+              <div><strong>Rareté:</strong> ${this.getRarityLabel(analysis.estimated_rarity)}</div>
+            </div>
+          </div>
+
+          <!-- Évaluations de prix -->
+          ${evaluations.length > 0 ? `
+            <div class="bg-green-50 rounded-lg p-4 mb-4">
+              <h4 class="font-semibold mb-2">💰 Évaluations (${evaluations.length} sources)</h4>
+              <div class="text-2xl font-bold text-green-800 mb-2">
+                ${this.formatCurrency(avgPrice)} CAD
+              </div>
+              <div class="grid grid-cols-1 gap-2 text-sm">
+                ${evaluations.map(eval => `
+                  <div class="flex justify-between">
+                    <span>${this.getSourceLabel(eval.evaluation_source)}:</span>
+                    <span class="font-semibold">${this.formatCurrency(eval.estimated_value || 0)}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : `
+            <div class="bg-yellow-50 rounded-lg p-4 mb-4">
+              <h4 class="font-semibold mb-2">⚠️ Aucune évaluation trouvée</h4>
+              <p class="text-sm text-yellow-800">
+                Aucune source n'a pu évaluer cet item. Vérifiez l'orthographe ou essayez avec plus d'informations.
+              </p>
+            </div>
+          `}
+
+          <!-- Insights marché -->
+          <div class="bg-blue-50 rounded-lg p-4 mb-4">
+            <h4 class="font-semibold mb-2">📊 Insights Marché</h4>
+            <div class="text-sm space-y-1">
+              <div><strong>Évaluation rareté:</strong> ${insights.rarity_assessment}</div>
+              <div><strong>Tendance:</strong> ${this.getTrendLabel(insights.market_trend)}</div>
+              <div><strong>Demande estimée:</strong> ${this.getDemandLabel(insights.estimated_demand)}</div>
+              <div><strong>Ventes comparables:</strong> ${insights.comparable_sales} items</div>
+            </div>
+          </div>
+
+          <!-- Suggestions -->
+          ${result.suggested_improvements.length > 0 ? `
+            <div class="bg-purple-50 rounded-lg p-4">
+              <h4 class="font-semibold mb-2">💡 Suggestions</h4>
+              <ul class="text-sm space-y-1">
+                ${result.suggested_improvements.map(suggestion => `
+                  <li><i class="fas fa-lightbulb text-yellow-500 mr-2"></i>${suggestion}</li>
+                `).join('')}
+              </ul>
+            </div>
+          ` : ''}
+
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(resultModal);
+    
+    // Fermer en cliquant à l'extérieur
+    resultModal.addEventListener('click', (e) => {
+      if (e.target === resultModal) {
+        resultModal.remove();
+      }
+    });
+
+    this.showNotification('Évaluation intelligente terminée !', 'success');
+  }
+
+  // Helpers pour l'affichage
+  getRarityLabel(rarity) {
+    const labels = {
+      'ultra_rare': '💎 Ultra Rare',
+      'very_rare': '💍 Très Rare',
+      'rare': '🔹 Rare',
+      'uncommon': '🔸 Peu Commun',
+      'common': '⚪ Commun'
+    };
+    return labels[rarity] || rarity;
+  }
+
+  getSourceLabel(source) {
+    const labels = {
+      'ebay_sold_listings': 'eBay Vendus',
+      'discogs': 'Discogs',
+      'google_books': 'Google Books',
+      'abebooks': 'AbeBooks',
+      'enhanced_ai': 'IA Avancée'
+    };
+    return labels[source] || source;
+  }
+
+  getTrendLabel(trend) {
+    const labels = {
+      'increasing': '📈 En hausse',
+      'stable': '➡️ Stable', 
+      'decreasing': '📉 En baisse'
+    };
+    return labels[trend] || trend;
+  }
+
+  getDemandLabel(demand) {
+    const labels = {
+      'high': '🔥 Élevée',
+      'medium': '🟡 Modérée',
+      'low': '🔵 Faible'
+    };
+    return labels[demand] || demand;
   }
 
   showNotification(message, type = 'info') {

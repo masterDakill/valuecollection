@@ -127,6 +127,10 @@ export type ItemCategory =
   | 'jewelry' 
   | 'watches'
   | 'memorabilia'
+  | 'records'  // Vinyles, LP, EP
+  | 'cds'      // CDs, DVDs audio
+  | 'dvds'     // Films DVD/Blu-ray
+  | 'games'    // Jeux vidéo
   | 'other';
 
 export type ConditionGrade = 
@@ -158,6 +162,10 @@ export type EvaluationSource =
   | 'tcgplayer'
   | 'mercari'
   | 'facebook_marketplace'
+  | 'discogs'           // Musique vinyles/CDs
+  | 'musicbrainz'       // Base de données musicale
+  | 'books'             // Service combiné livres
+  | 'enhanced_ai'       // Évaluation IA améliorée
   | 'manual_appraisal';
 
 export type ActionType = 
