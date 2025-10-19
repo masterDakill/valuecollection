@@ -648,7 +648,10 @@ class CollectionEvaluator {
       link.href = URL.createObjectURL(blob);
       link.download = \`collection_export_\${new Date().toISOString().split('T')[0]}.csv\`;
       link.click();
-      
+
+      // Libérer la mémoire après téléchargement
+      setTimeout(() => URL.revokeObjectURL(link.href), 100);
+
       this.showNotification(\`✅ Export réussi - \${items.length} items exportés\`, 'success');
       
     } catch (error) {
@@ -735,7 +738,10 @@ class CollectionEvaluator {
     link.href = URL.createObjectURL(blob);
     link.download = \`template_\${templateId}_\${new Date().toISOString().split('T')[0]}.csv\`;
     link.click();
-    
+
+    // Libérer la mémoire après téléchargement
+    setTimeout(() => URL.revokeObjectURL(link.href), 100);
+
     // Fermer la modal
     const modal = document.querySelector('.fixed.inset-0');
     if (modal) modal.remove();
@@ -792,7 +798,12 @@ class CollectionEvaluator {
         const row = {};
         
         headers.forEach((header, index) => {
-          const cleanHeader = header.toLowerCase().replace(/[^a-z]/g, '_');
+          // Normaliser le header : garder lettres, chiffres, remplacer espaces/spéciaux par underscore
+          const cleanHeader = header
+            .toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Enlever accents
+            .replace(/[^a-z0-9]+/g, '_') // Remplacer caractères spéciaux par underscore
+            .replace(/^_+|_+$/g, ''); // Enlever underscores début/fin
           row[cleanHeader] = values[index] || '';
         });
         

@@ -49,11 +49,33 @@ export class MultiExpertAISystem {
   private openaiApiKey?: string;
   private anthropicApiKey?: string;
   private geminiApiKey?: string;
+  private readonly API_TIMEOUT = 30000; // 30 secondes timeout
 
   constructor(env: any) {
     this.openaiApiKey = env.OPENAI_API_KEY;
     this.anthropicApiKey = env.ANTHROPIC_API_KEY;
     this.geminiApiKey = env.GEMINI_API_KEY;
+  }
+
+  // Helper: Fetch avec timeout
+  private async fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = this.API_TIMEOUT): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error(`Request timeout after ${timeoutMs}ms`);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -135,7 +157,7 @@ export class MultiExpertAISystem {
     }
 
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await this.fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.openaiApiKey}`,
@@ -186,7 +208,7 @@ export class MultiExpertAISystem {
     const prompt = this.buildClaudePrompt(textDescription, context);
 
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const response = await this.fetchWithTimeout('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'x-api-key': this.anthropicApiKey,

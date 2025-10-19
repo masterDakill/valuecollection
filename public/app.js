@@ -15,6 +15,24 @@ class CollectionEvaluator {
     this.loadItems();
   }
 
+  // Nettoyer les blob URLs pour éviter les fuites mémoire
+  cleanupBlobUrls() {
+    if (this.currentItems && Array.isArray(this.currentItems)) {
+      this.currentItems.forEach(item => {
+        if (item.image_url && item.image_url.startsWith('blob:')) {
+          URL.revokeObjectURL(item.image_url);
+        }
+      });
+    }
+  }
+
+  // Échapper le HTML pour prévenir les attaques XSS
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
   setupEventListeners() {
     // Évaluation par texte
     const quickEvalBtn = document.getElementById('quickEvalBtn');
@@ -53,10 +71,12 @@ class CollectionEvaluator {
         e.stopPropagation();
         importMenu.classList.toggle('hidden');
       });
-      
-      // Fermer le menu en cliquant ailleurs
-      document.addEventListener('click', () => {
-        importMenu.classList.add('hidden');
+
+      // Fermer le menu en cliquant ailleurs (mais pas sur le menu lui-même)
+      document.addEventListener('click', (e) => {
+        if (!importMenu.contains(e.target) && !importDropdown.contains(e.target)) {
+          importMenu.classList.add('hidden');
+        }
       });
     }
 
@@ -331,6 +351,8 @@ class CollectionEvaluator {
       const response = await axios.get('/api/items?per_page=5');
       if (response.data.success) {
         console.log('Items chargés:', response.data.items.length);
+        // Nettoyer les anciennes blob URLs avant de charger nouvelles données
+        this.cleanupBlobUrls();
         this.currentItems = response.data.items;
       }
     } catch (error) {
@@ -593,7 +615,10 @@ class CollectionEvaluator {
       link.href = URL.createObjectURL(blob);
       link.download = `collection_export_${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
-      
+
+      // Libérer la mémoire après téléchargement
+      setTimeout(() => URL.revokeObjectURL(link.href), 100);
+
       this.showNotification(`✅ Export réussi - ${items.length} items exportés`, 'success');
       
     } catch (error) {
@@ -653,7 +678,12 @@ class CollectionEvaluator {
         const row = {};
         
         headers.forEach((header, index) => {
-          const cleanHeader = header.toLowerCase().replace(/[^a-z]/g, '_');
+          // Normaliser le header : garder lettres, chiffres, remplacer espaces/spéciaux par underscore
+          const cleanHeader = header
+            .toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Enlever accents
+            .replace(/[^a-z0-9]+/g, '_') // Remplacer caractères spéciaux par underscore
+            .replace(/^_+|_+$/g, ''); // Enlever underscores début/fin
           row[cleanHeader] = values[index] || '';
         });
         
@@ -694,8 +724,11 @@ class CollectionEvaluator {
 
   // Traitement des données CSV
   async processCSVData(data, hasImages = false) {
+    // Nettoyer les anciennes blob URLs avant import
+    this.cleanupBlobUrls();
+
     const results = { processed: 0, errors: 0, items: [] };
-    
+
     for (const row of data) {
       try {
         // Envoyer à l'API pour sauvegarde
@@ -889,7 +922,10 @@ class CollectionEvaluator {
     link.href = URL.createObjectURL(blob);
     link.download = `template_${templateId}_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
-    
+
+    // Libérer la mémoire après téléchargement
+    setTimeout(() => URL.revokeObjectURL(link.href), 100);
+
     // Fermer la modal
     document.querySelector('.fixed.inset-0').remove();
     
@@ -936,15 +972,15 @@ class CollectionEvaluator {
           <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
             <h4 class="font-semibold text-red-800 mb-2">Erreurs détectées:</h4>
             <ul class="text-sm text-red-700 space-y-1">
-              ${errors.map(error => `<li>• ${error}</li>`).join('')}
+              ${errors.map(error => `<li>• ${this.escapeHtml(error)}</li>`).join('')}
             </ul>
           </div>
-          
+
           ${suggestions.length > 0 ? `
           <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
             <h4 class="font-semibold text-yellow-800 mb-2">Suggestions:</h4>
             <ul class="text-sm text-yellow-700 space-y-1">
-              ${suggestions.map(suggestion => `<li>• ${suggestion}</li>`).join('')}
+              ${suggestions.map(suggestion => `<li>• ${this.escapeHtml(suggestion)}</li>`).join('')}
             </ul>
           </div>
           ` : ''}
@@ -1035,8 +1071,8 @@ class CollectionEvaluator {
             <div class="space-y-2 max-h-32 overflow-y-auto">
               ${duplicates.slice(0, 5).map(dup => `
                 <div class="text-sm">
-                  <strong>Nouveau:</strong> "${dup.newItem.title}" 
-                  <strong>Similaire à:</strong> "${dup.existingItem.title}" 
+                  <strong>Nouveau:</strong> "${this.escapeHtml(dup.newItem.title)}"
+                  <strong>Similaire à:</strong> "${this.escapeHtml(dup.existingItem.title)}"
                   (${Math.round(dup.similarity * 100)}% similarité)
                 </div>
               `).join('')}
