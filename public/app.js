@@ -4,667 +4,197 @@ class CollectionEvaluator {
     this.selectedFiles = [];
     this.currentItems = [];
     this.currentFilters = {};
-    this.uploadQueue = [];
-    this.isUploading = false;
-    
+    this.selectedMedia = null;
     this.init();
+  }
+
+  init() {
+    console.log('🚀 Évaluateur de Collection Pro initialisé');
+    this.setupEventListeners();
     this.loadStats();
     this.loadItems();
   }
 
-  init() {
-    this.setupEventListeners();
-    this.setupDropZone();
-    this.updateThreshold();
-  }
-
   setupEventListeners() {
-    // Upload et fichiers
-    document.getElementById('fileInput').addEventListener('change', (e) => this.handleFileSelect(e));
-    document.getElementById('dropZone').addEventListener('click', () => document.getElementById('fileInput').click());
-    document.getElementById('clearFiles').addEventListener('click', () => this.clearFiles());
-    document.getElementById('startUpload').addEventListener('click', () => this.startBatchUpload());
-    document.getElementById('quickEvalBtn').addEventListener('click', () => this.quickEvaluate());
-    document.getElementById('testSmartEval').addEventListener('click', () => this.testSmartEvaluation());
+    // Évaluation par texte
+    const quickEvalBtn = document.getElementById('quickEvalBtn');
+    if (quickEvalBtn) {
+      quickEvalBtn.addEventListener('click', () => this.quickEvaluate());
+    }
 
-    // Filtres
-    document.getElementById('applyFilters').addEventListener('click', () => this.applyFilters());
-    document.getElementById('searchInput').addEventListener('keyup', _.debounce(() => this.applyFilters(), 500));
-    document.getElementById('thresholdValue').addEventListener('change', () => this.updateThreshold());
+    const testSmartEval = document.getElementById('testSmartEval');
+    if (testSmartEval) {
+      testSmartEval.addEventListener('click', () => this.testSmartEvaluation());
+    }
 
-    // Actions
-    document.getElementById('exportData').addEventListener('click', () => this.exportToCSV());
-    document.getElementById('viewGrid').addEventListener('click', () => this.switchView('grid'));
-    document.getElementById('viewList').addEventListener('click', () => this.switchView('list'));
+    // Upload de média
+    const selectMediaBtn = document.getElementById('selectMediaBtn');
+    const mediaInput = document.getElementById('mediaInput');
+    if (selectMediaBtn && mediaInput) {
+      selectMediaBtn.addEventListener('click', () => mediaInput.click());
+      mediaInput.addEventListener('change', (e) => this.handleMediaSelect(e));
+    }
 
-    // Auto-refresh stats
-    setInterval(() => this.loadStats(), 30000); // Toutes les 30s
+    const evaluateMediaBtn = document.getElementById('evaluateMediaBtn');
+    if (evaluateMediaBtn) {
+      evaluateMediaBtn.addEventListener('click', () => this.evaluateMedia());
+    }
+
+    const clearMediaBtn = document.getElementById('clearMediaBtn');
+    if (clearMediaBtn) {
+      clearMediaBtn.addEventListener('click', () => this.clearMedia());
+    }
+
+    // Import/Export avancés
+    const importDropdown = document.getElementById('importDropdown');
+    const importMenu = document.getElementById('importMenu');
+    if (importDropdown && importMenu) {
+      importDropdown.addEventListener('click', (e) => {
+        e.stopPropagation();
+        importMenu.classList.toggle('hidden');
+      });
+      
+      // Fermer le menu en cliquant ailleurs
+      document.addEventListener('click', () => {
+        importMenu.classList.add('hidden');
+      });
+    }
+
+    // Import CSV Simple
+    const importCSV = document.getElementById('importCSV');
+    const csvInput = document.getElementById('csvFileInput');
+    if (importCSV && csvInput) {
+      importCSV.addEventListener('click', () => csvInput.click());
+      csvInput.addEventListener('change', (e) => this.handleCSVImport(e));
+    }
+
+    // Import ZIP + Images
+    const importZIP = document.getElementById('importZIP');
+    const zipInput = document.getElementById('zipFileInput');
+    if (importZIP && zipInput) {
+      importZIP.addEventListener('click', () => zipInput.click());
+      zipInput.addEventListener('change', (e) => this.handleZIPImport(e));
+    }
+
+    // Import Incrémental
+    const importIncremental = document.getElementById('importIncremental');
+    const incrementalInput = document.getElementById('incrementalInput');
+    if (importIncremental && incrementalInput) {
+      importIncremental.addEventListener('click', () => incrementalInput.click());
+      incrementalInput.addEventListener('change', (e) => this.handleIncrementalImport(e));
+    }
+
+    // Télécharger Template
+    const downloadTemplate = document.getElementById('downloadTemplate');
+    if (downloadTemplate) {
+      downloadTemplate.addEventListener('click', () => this.showTemplateSelector());
+    }
+
+    const exportBtn = document.getElementById('exportData');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', () => this.exportToCSV());
+    }
   }
 
-  setupDropZone() {
-    const dropZone = document.getElementById('dropZone');
-    
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-      dropZone.addEventListener(eventName, this.preventDefaults, false);
-    });
+  async handleMediaSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
 
-    ['dragenter', 'dragover'].forEach(eventName => {
-      dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-      dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
-    });
-
-    dropZone.addEventListener('drop', (e) => this.handleDrop(e), false);
-  }
-
-  preventDefaults(e) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
-
-  async handleFileSelect(e) {
-    const files = Array.from(e.target.files);
-    await this.processFiles(files);
-  }
-
-  async handleDrop(e) {
-    const dt = e.dataTransfer;
-    const files = Array.from(dt.files);
-    await this.processFiles(files);
-  }
-
-  async processFiles(files) {
-    // Filtrer les fichiers image valides
-    const validFiles = files.filter(file => {
-      const isImage = file.type.startsWith('image/');
-      const isValidSize = file.size <= 10 * 1024 * 1024; // 10MB
-      return isImage && isValidSize;
-    });
-
-    if (validFiles.length === 0) {
-      this.showNotification('Aucun fichier image valide sélectionné', 'warning');
+    // Vérification du fichier
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      this.showNotification('Fichier trop volumineux (max 10MB)', 'warning');
       return;
     }
 
-    if (validFiles.length > 100) {
-      this.showNotification('Maximum 100 fichiers autorisés à la fois', 'warning');
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime', 'video/x-msvideo'];
+    if (!validTypes.includes(file.type)) {
+      this.showNotification('Type de fichier non supporté', 'warning');
       return;
     }
 
-    // Ajouter à la sélection
-    for (const file of validFiles) {
-      if (!this.selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
-        this.selectedFiles.push(file);
-      }
-    }
-
-    this.displayFilePreview();
-    this.showNotification(`${validFiles.length} fichier(s) ajouté(s)`, 'success');
+    // Afficher la prévisualisation
+    this.displayMediaPreview(file);
+    this.showNotification('Fichier sélectionné avec succès', 'success');
   }
 
-  displayFilePreview() {
-    const preview = document.getElementById('filePreview');
-    const fileList = document.getElementById('fileList');
-    
-    if (this.selectedFiles.length === 0) {
-      preview.classList.add('hidden');
-      return;
+  displayMediaPreview(file) {
+    const preview = document.getElementById('mediaPreview');
+    const thumb = document.getElementById('mediaThumb');
+    const name = document.getElementById('mediaName');
+    const size = document.getElementById('mediaSize');
+
+    name.textContent = file.name;
+    size.textContent = this.formatFileSize(file.size);
+
+    // Créer une miniature
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        thumb.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover rounded-lg" alt="Preview" />`;
+      };
+      reader.readAsDataURL(file);
+    } else if (file.type.startsWith('video/')) {
+      thumb.innerHTML = '<i class="fas fa-video text-purple-500 text-xl"></i>';
     }
 
     preview.classList.remove('hidden');
-    fileList.innerHTML = '';
-
-    this.selectedFiles.forEach((file, index) => {
-      const fileItem = document.createElement('div');
-      fileItem.className = 'relative bg-gray-50 border rounded-lg p-3';
-      
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        fileItem.innerHTML = `
-          <div class="aspect-square bg-gray-200 rounded-lg overflow-hidden mb-2">
-            <img src="${e.target.result}" alt="${file.name}" 
-                 class="w-full h-full object-cover" />
-          </div>
-          <p class="text-xs text-gray-600 truncate" title="${file.name}">
-            ${file.name}
-          </p>
-          <p class="text-xs text-gray-400">
-            ${this.formatFileSize(file.size)}
-          </p>
-          <button onclick="app.removeFile(${index})" 
-                  class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600">
-            ×
-          </button>
-        `;
-      };
-      reader.readAsDataURL(file);
-      
-      fileList.appendChild(fileItem);
-    });
+    this.selectedMedia = file;
   }
 
-  removeFile(index) {
-    this.selectedFiles.splice(index, 1);
-    this.displayFilePreview();
-  }
-
-  clearFiles() {
-    this.selectedFiles = [];
-    this.displayFilePreview();
-    document.getElementById('fileInput').value = '';
-  }
-
-  async startBatchUpload() {
-    if (this.selectedFiles.length === 0) {
+  async evaluateMedia() {
+    if (!this.selectedMedia) {
       this.showNotification('Aucun fichier sélectionné', 'warning');
       return;
     }
 
-    if (this.isUploading) {
-      this.showNotification('Upload déjà en cours', 'warning');
-      return;
-    }
-
-    this.isUploading = true;
-    const dropContent = document.getElementById('dropContent');
-    const uploadProgress = document.getElementById('uploadProgress');
-    const progressBar = document.getElementById('progressBar');
-    const progressText = document.getElementById('progressText');
-
-    dropContent.classList.add('hidden');
-    uploadProgress.classList.remove('hidden');
-
-    let completed = 0;
-    const total = this.selectedFiles.length;
+    const btn = document.getElementById('evaluateMediaBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyse...';
+    btn.disabled = true;
 
     try {
-      for (let i = 0; i < this.selectedFiles.length; i++) {
-        const file = this.selectedFiles[i];
-        
-        progressText.textContent = `Traitement ${i + 1}/${total}: ${file.name}`;
-        
-        try {
-          await this.uploadSingleFile(file);
-          completed++;
-        } catch (error) {
-          console.error(`Erreur upload ${file.name}:`, error);
-        }
+      // Convertir le fichier en URL data
+      const mediaUrl = await this.fileToDataUrl(this.selectedMedia);
+      const isVideo = this.selectedMedia.type.startsWith('video/');
 
-        const progress = ((i + 1) / total) * 100;
-        progressBar.style.width = `${progress}%`;
-        
-        // Délai entre uploads pour éviter surcharge
-        if (i < this.selectedFiles.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
+      const response = await axios.post('/api/smart-evaluate', {
+        imageUrl: isVideo ? null : mediaUrl,
+        videoUrl: isVideo ? mediaUrl : null,
+        filename: this.selectedMedia.name
+      });
+
+      if (response.data.success) {
+        this.displayEvaluationResult(response.data, 'Fichier: ' + this.selectedMedia.name);
+        this.showNotification('✅ Analyse du fichier terminée !', 'success');
+      } else {
+        this.showNotification('Erreur: ' + response.data.error, 'error');
       }
 
-      this.showNotification(`${completed}/${total} fichiers traités avec succès`, 'success');
-      this.clearFiles();
-      await this.loadStats();
-      await this.loadItems();
-
     } catch (error) {
-      this.showNotification('Erreur lors de l\'upload', 'error');
-      console.error('Batch upload error:', error);
+      console.error('Erreur analyse fichier:', error);
+      this.showNotification('Erreur lors de l\'analyse', 'error');
     } finally {
-      this.isUploading = false;
-      dropContent.classList.remove('hidden');
-      uploadProgress.classList.add('hidden');
-      progressBar.style.width = '0%';
+      btn.innerHTML = originalText;
+      btn.disabled = false;
     }
   }
 
-  async uploadSingleFile(file) {
-    // Simuler upload vers stockage cloud (Cloudflare R2, AWS S3, etc.)
-    const imageUrl = await this.simulateImageUpload(file);
+  clearMedia() {
+    const preview = document.getElementById('mediaPreview');
+    const input = document.getElementById('mediaInput');
     
-    // Extraire métadonnées du nom de fichier
-    const metadata = this.extractMetadataFromFilename(file.name);
-    
-    // Détecter si c'est une vidéo
-    const isVideo = file.type.startsWith('video/');
-    
-    // Upload intelligent avec analyse automatique
-    const response = await axios.post('/api/upload', {
-      title: metadata.title,
-      description: metadata.description,
-      category: metadata.category,
-      condition_grade: metadata.condition,
-      year_made: metadata.year,
-      manufacturer: metadata.manufacturer,
-      image_url: isVideo ? null : imageUrl,
-      video_url: isVideo ? imageUrl : null,
-      text_input: metadata.searchText, // Texte libre extrait
-      filename: file.name,
-      auto_evaluate: true  // Évaluation intelligente automatique
-    });
-
-    if (!response.data.success) {
-      throw new Error(response.data.error);
-    }
-
-    // L'évaluation est maintenant automatique et intégrée
-    console.log('✅ Upload avec évaluation intelligente:', response.data.evaluation_result);
-
-    return response.data;
+    preview.classList.add('hidden');
+    input.value = '';
+    this.selectedMedia = null;
   }
 
-  async simulateImageUpload(file) {
-    // En production, ceci uploadrait vers Cloudflare R2 ou service similaire
-    // Pour le moment, on simule avec une URL data
+  async fileToDataUrl(file) {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => resolve(e.target.result);
       reader.readAsDataURL(file);
     });
-  }
-
-  extractMetadataFromFilename(filename) {
-    // Intelligence améliorée pour extraire info du nom de fichier
-    const name = filename.toLowerCase().replace(/\\.[^/.]+$/, '');
-    
-    let category = 'other';
-    let condition = 'good';
-    let year = null;
-    let manufacturer = '';
-    let searchText = '';
-    
-    // Détection de catégorie enrichie
-    if (name.includes('vinyl') || name.includes('lp') || name.includes('ep') || name.includes('45rpm')) {
-      category = 'records';
-    } else if (name.includes('cd') && !name.includes('card')) {
-      category = 'cds';
-    } else if (name.includes('dvd') || name.includes('bluray') || name.includes('blu-ray')) {
-      category = 'dvds';
-    } else if (name.includes('card') || name.includes('carte')) {
-      if (name.includes('hockey') || name.includes('baseball') || name.includes('sport')) {
-        category = 'sports_cards';
-      } else if (name.includes('pokemon') || name.includes('magic') || name.includes('tcg')) {
-        category = 'trading_cards';
-      }
-    } else if (name.includes('book') || name.includes('livre')) {
-      category = 'books';
-    } else if (name.includes('comic') || name.includes('bd')) {
-      category = 'comics';
-    } else if (name.includes('game') || name.includes('jeu')) {
-      category = 'games';
-    } else if (name.includes('vintage') || name.includes('antique')) {
-      category = 'vintage';
-    }
-
-    // Détection d'état enrichie
-    if (name.includes('mint') || name.includes('sealed')) condition = 'mint';
-    else if (name.includes('near mint') || name.includes('nm')) condition = 'near_mint';
-    else if (name.includes('excellent') || name.includes('vg+')) condition = 'excellent';
-    else if (name.includes('very good') || name.includes('vg')) condition = 'very_good';
-    else if (name.includes('good')) condition = 'good';
-    else if (name.includes('fair') || name.includes('poor')) condition = 'fair';
-
-    // Détection d'année
-    const yearMatch = name.match(/(19|20)\\d{2}/);
-    if (yearMatch) {
-      year = parseInt(yearMatch[0]);
-    }
-
-    // Fabricants/labels étendus
-    const manufacturers = [
-      // Cartes
-      'topps', 'upper deck', 'panini', 'opc', 'o-pee-chee', 'parkhurst', 'bowman',
-      // Vinyles/CDs
-      'columbia', 'rca', 'atlantic', 'capitol', 'motown', 'warner', 'emi', 'universal',
-      // Livres
-      'penguin', 'vintage', 'bantam', 'del rey', 'tor', 'scholastic',
-      // Éditeurs québécois
-      'boreal', 'leméac', 'quebec amerique', 'vlb', 'fides'
-    ];
-    
-    for (const mfg of manufacturers) {
-      if (name.includes(mfg)) {
-        manufacturer = mfg;
-        break;
-      }
-    }
-
-    // Extraction de texte de recherche intelligent
-    searchText = name
-      .replace(/[-_]/g, ' ')
-      .replace(/\\b(cd|dvd|vinyl|lp|ep|mint|excellent|good)\\b/gi, '')
-      .replace(/\\b\\d{4}\\b/, '') // Supprimer années
-      .replace(/\\s+/g, ' ')
-      .trim();
-
-    // Patterns spéciaux pour musique (artiste - album)
-    const musicPattern = /(.*?)[-_](.*?)(?:[-_]\\d{4})?$/;
-    const musicMatch = searchText.match(musicPattern);
-    if (musicMatch && (category === 'records' || category === 'cds')) {
-      searchText = `${musicMatch[1].trim()} ${musicMatch[2].trim()}`;
-    }
-
-    return {
-      title: this.cleanTitle(name),
-      description: `Analysé automatiquement depuis ${filename}`,
-      category,
-      condition,
-      year,
-      manufacturer,
-      searchText
-    };
-  }
-
-  cleanTitle(name) {
-    return name
-      .replace(/[-_]/g, ' ')
-      .replace(/\\b\\w/g, l => l.toUpperCase())
-      .replace(/\\s+/g, ' ')
-      .trim()
-      .substring(0, 100);
-  }
-
-  async evaluateItem(itemId) {
-    try {
-      await axios.post(`/api/evaluate/${itemId}`);
-    } catch (error) {
-      console.error('Evaluation error:', error);
-    }
-  }
-
-  async loadStats() {
-    try {
-      const response = await axios.get('/api/stats');
-      if (response.data.success) {
-        const stats = response.data.stats;
-        
-        document.getElementById('totalItems').textContent = stats.total_items || 0;
-        document.getElementById('analyzedItems').textContent = stats.analyzed_items || 0;
-        document.getElementById('totalValue').textContent = this.formatCurrency(stats.total_value || 0);
-        
-        this.updateThreshold();
-      }
-    } catch (error) {
-      console.error('Stats loading error:', error);
-    }
-  }
-
-  updateThreshold() {
-    const threshold = parseFloat(document.getElementById('thresholdValue').value) || 0;
-    
-    // Compter items au-dessus du seuil (simulation pour l'instant)
-    const aboveThreshold = this.currentItems.filter(item => 
-      (item.estimated_value || 0) >= threshold
-    ).length;
-    
-    document.getElementById('aboveThreshold').textContent = aboveThreshold;
-  }
-
-  async loadItems(page = 1) {
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        per_page: '20',
-        ...this.currentFilters
-      });
-
-      const response = await axios.get(`/api/items?${params}`);
-      
-      if (response.data.success) {
-        this.currentItems = response.data.items;
-        this.displayItems(response.data.items);
-        this.updateItemCount(response.data.pagination.total);
-      }
-    } catch (error) {
-      console.error('Items loading error:', error);
-      this.showNotification('Erreur lors du chargement des items', 'error');
-    }
-  }
-
-  applyFilters() {
-    this.currentFilters = {
-      search: document.getElementById('searchInput').value,
-      category: document.getElementById('categoryFilter').value,
-      condition: document.getElementById('conditionFilter').value,
-      status: document.getElementById('statusFilter').value
-    };
-
-    // Nettoyer les filtres vides
-    Object.keys(this.currentFilters).forEach(key => {
-      if (!this.currentFilters[key]) {
-        delete this.currentFilters[key];
-      }
-    });
-
-    this.loadItems(1);
-  }
-
-  displayItems(items) {
-    const container = document.getElementById('itemsList');
-    const emptyState = document.getElementById('emptyState');
-    
-    if (items.length === 0) {
-      emptyState.classList.remove('hidden');
-      return;
-    }
-
-    emptyState.classList.add('hidden');
-    
-    const itemsHtml = items.map(item => this.renderItemCard(item)).join('');
-    container.innerHTML = itemsHtml;
-  }
-
-  renderItemCard(item) {
-    const statusColors = {
-      completed: 'bg-green-100 text-green-800',
-      processing: 'bg-yellow-100 text-yellow-800',
-      uploaded: 'bg-blue-100 text-blue-800',
-      error: 'bg-red-100 text-red-800'
-    };
-
-    const statusColor = statusColors[item.processing_status] || 'bg-gray-100 text-gray-800';
-    const processingClass = item.processing_status === 'processing' ? 'processing' : '';
-    
-    return `
-      <div class="item-card ${processingClass} border-b p-6 hover:bg-gray-50">
-        <div class="flex items-start space-x-4">
-          
-          <!-- Image -->
-          <div class="flex-shrink-0">
-            <div class="w-24 h-24 bg-gray-200 rounded-lg overflow-hidden">
-              ${item.primary_image_url ? 
-                `<img src="${item.primary_image_url}" alt="${item.title}" class="w-full h-full object-cover" />` :
-                `<div class="w-full h-full flex items-center justify-center text-gray-400">
-                   <i class="fas fa-image text-2xl"></i>
-                 </div>`
-              }
-            </div>
-          </div>
-
-          <!-- Contenu principal -->
-          <div class="flex-1 min-w-0">
-            <div class="flex items-start justify-between">
-              <div class="flex-1">
-                <h3 class="text-lg font-semibold text-gray-900 truncate">
-                  ${item.title}
-                </h3>
-                <p class="text-sm text-gray-600 mt-1">
-                  ${item.description || 'Aucune description'}
-                </p>
-                
-                <div class="flex items-center space-x-4 mt-2">
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    ${this.getCategoryLabel(item.category)}
-                  </span>
-                  
-                  ${item.condition_grade ? 
-                    `<span class="text-xs text-gray-500">État: ${this.getConditionLabel(item.condition_grade)}</span>` : ''
-                  }
-                  
-                  ${item.year_made ? 
-                    `<span class="text-xs text-gray-500">Année: ${item.year_made}</span>` : ''
-                  }
-                </div>
-              </div>
-
-              <!-- Prix et statut -->
-              <div class="text-right ml-4">
-                <div class="text-lg font-bold text-gray-900">
-                  ${item.estimated_value ? 
-                    this.formatCurrency(item.estimated_value) : 
-                    '<span class="text-gray-400">Non évalué</span>'
-                  }
-                </div>
-                
-                ${item.confidence_score ? 
-                  `<div class="text-xs text-gray-500">
-                     Confiance: ${Math.round(item.confidence_score * 100)}%
-                   </div>` : ''
-                }
-                
-                <div class="mt-2">
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor}">
-                    ${this.getStatusLabel(item.processing_status)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Actions -->
-            <div class="flex items-center space-x-3 mt-4">
-              <button onclick="app.evaluateItem(${item.id})" 
-                      class="text-blue-600 hover:text-blue-800 text-sm">
-                <i class="fas fa-search-dollar mr-1"></i>
-                Réévaluer
-              </button>
-              
-              <button onclick="app.viewItemDetails(${item.id})" 
-                      class="text-green-600 hover:text-green-800 text-sm">
-                <i class="fas fa-eye mr-1"></i>
-                Détails
-              </button>
-              
-              <button onclick="app.editItem(${item.id})" 
-                      class="text-yellow-600 hover:text-yellow-800 text-sm">
-                <i class="fas fa-edit mr-1"></i>
-                Modifier
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  getCategoryLabel(category) {
-    const labels = {
-      sports_cards: 'Cartes Sport',
-      books: 'Livres',
-      comics: 'BD/Comics',
-      trading_cards: 'Cartes TCG',
-      vintage: 'Vintage',
-      memorabilia: 'Souvenirs',
-      other: 'Autres'
-    };
-    return labels[category] || category;
-  }
-
-  getConditionLabel(condition) {
-    const labels = {
-      mint: 'Mint',
-      near_mint: 'Near Mint',
-      excellent: 'Excellent',
-      very_good: 'Très Bon',
-      good: 'Bon',
-      fair: 'Acceptable',
-      poor: 'Pauvre'
-    };
-    return labels[condition] || condition;
-  }
-
-  getStatusLabel(status) {
-    const labels = {
-      completed: 'Complété',
-      processing: 'En cours...',
-      uploaded: 'Uploadé',
-      error: 'Erreur'
-    };
-    return labels[status] || status;
-  }
-
-  updateItemCount(total) {
-    document.getElementById('itemCount').textContent = total;
-  }
-
-  viewItemDetails(itemId) {
-    // TODO: Implémenter modal de détails
-    console.log('View details for item:', itemId);
-  }
-
-  editItem(itemId) {
-    // TODO: Implémenter édition d'item
-    console.log('Edit item:', itemId);
-  }
-
-  switchView(viewType) {
-    // TODO: Implémenter vue grille
-    console.log('Switch to view:', viewType);
-  }
-
-  async exportToCSV() {
-    try {
-      const response = await axios.get('/api/items', {
-        params: { per_page: 10000, ...this.currentFilters }
-      });
-      
-      if (response.data.success) {
-        this.downloadCSV(response.data.items);
-      }
-    } catch (error) {
-      console.error('Export error:', error);
-      this.showNotification('Erreur lors de l\'export', 'error');
-    }
-  }
-
-  downloadCSV(items) {
-    const headers = [
-      'ID', 'Titre', 'Description', 'Catégorie', 'État', 
-      'Année', 'Fabricant', 'Valeur Estimée', 'Confiance', 'Statut'
-    ];
-    
-    const rows = items.map(item => [
-      item.id,
-      `"${item.title || ''}"`,
-      `"${item.description || ''}"`,
-      item.category,
-      item.condition_grade || '',
-      item.year_made || '',
-      item.manufacturer || '',
-      item.estimated_value || '',
-      item.confidence_score || '',
-      item.processing_status
-    ]);
-
-    const csvContent = [headers, ...rows]
-      .map(row => row.join(','))
-      .join('\\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `collection_export_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-  }
-
-  formatCurrency(amount) {
-    return new Intl.NumberFormat('fr-CA', {
-      style: 'currency',
-      currency: 'CAD'
-    }).format(amount);
   }
 
   formatFileSize(bytes) {
@@ -674,11 +204,9 @@ class CollectionEvaluator {
     return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
   }
 
-  // Évaluation rapide par texte libre
   async quickEvaluate() {
-    const textInput = document.getElementById('quickEvalText').value.trim();
-    
-    if (!textInput) {
+    const textInput = document.getElementById('quickEvalText');
+    if (!textInput || !textInput.value.trim()) {
       this.showNotification('Veuillez saisir un titre et auteur/artiste', 'warning');
       return;
     }
@@ -690,25 +218,24 @@ class CollectionEvaluator {
 
     try {
       const response = await axios.post('/api/smart-evaluate', {
-        text_input: textInput
+        text_input: textInput.value
       });
 
       if (response.data.success) {
-        this.displayQuickEvalResult(response.data);
+        this.displayEvaluationResult(response.data, 'Texte: "' + textInput.value + '"');
+        this.showNotification('✅ Évaluation terminée !', 'success');
       } else {
-        this.showNotification('Erreur lors de l\'évaluation: ' + response.data.error, 'error');
+        this.showNotification('Erreur: ' + response.data.error, 'error');
       }
-
     } catch (error) {
-      console.error('Erreur évaluation rapide:', error);
-      this.showNotification('Erreur de connexion lors de l\'évaluation', 'error');
+      console.error('Erreur évaluation:', error);
+      this.showNotification('Erreur de connexion', 'error');
     } finally {
       btn.innerHTML = originalText;
       btn.disabled = false;
     }
   }
 
-  // Test de l'évaluation intelligente avec exemples
   async testSmartEvaluation() {
     const examples = [
       'Abbey Road The Beatles',
@@ -720,167 +247,107 @@ class CollectionEvaluator {
     const randomExample = examples[Math.floor(Math.random() * examples.length)];
     document.getElementById('quickEvalText').value = randomExample;
     
-    this.showNotification(`Test avec: "${randomExample}"`, 'info');
+    this.showNotification('Test avec: "' + randomExample + '"', 'info');
     await this.quickEvaluate();
   }
 
-  // Affichage des résultats d'évaluation rapide
-  displayQuickEvalResult(result) {
+  displayEvaluationResult(result, source) {
     const analysis = result.smart_analysis;
-    const evaluations = result.evaluations || [];
-    const insights = result.market_insights;
-
-    // Créer modal ou section de résultats
-    const resultModal = document.createElement('div');
-    resultModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    const confidence = Math.round(result.matching_confidence * 100);
     
-    const avgPrice = evaluations.length > 0 
-      ? evaluations.reduce((sum, e) => sum + (e.estimated_value || 0), 0) / evaluations.length
-      : 0;
-
-    const confidenceColor = result.matching_confidence > 0.8 ? 'green' : 
-                           result.matching_confidence > 0.6 ? 'yellow' : 'red';
-
-    resultModal.innerHTML = `
-      <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
-        <div class="p-6">
-          <div class="flex justify-between items-start mb-4">
-            <h3 class="text-xl font-bold text-gray-900">
-              <i class="fas fa-brain text-blue-600 mr-2"></i>
-              Évaluation Intelligente
-            </h3>
-            <button onclick="this.parentElement.parentElement.parentElement.parentElement.remove()" 
-                    class="text-gray-400 hover:text-gray-600">
-              <i class="fas fa-times text-xl"></i>
-            </button>
+    // Créer modal de résultats
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+    
+    modal.innerHTML = `<div class="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-96 overflow-y-auto">
+      <div class="p-6">
+        <div class="flex justify-between items-start mb-4">
+          <h3 class="text-xl font-bold text-gray-900">
+            <i class="fas fa-brain text-purple-600 mr-2"></i>
+            Analyse IA Terminée
+          </h3>
+          <button onclick="this.parentElement.parentElement.parentElement.parentElement.remove()" 
+                  class="text-gray-400 hover:text-gray-600">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+        
+        <div class="bg-gray-50 rounded-lg p-4 mb-4">
+          <h4 class="font-semibold mb-2">📄 Source: ${source}</h4>
+          <div class="grid grid-cols-2 gap-2 text-sm">
+            <div><strong>Catégorie:</strong> ${analysis.category || 'Non détectée'}</div>
+            <div><strong>Confiance:</strong> <span class="text-purple-600 font-semibold">${confidence}%</span></div>
+            <div><strong>Titre:</strong> ${analysis.extracted_data?.title || 'Non détecté'}</div>
+            <div><strong>Auteur/Artiste:</strong> ${analysis.extracted_data?.artist_author || 'Non détecté'}</div>
+            <div><strong>Année:</strong> ${analysis.extracted_data?.year || 'Non détectée'}</div>
+            <div><strong>Rareté:</strong> ${analysis.estimated_rarity || 'Inconnue'}</div>
           </div>
-
-          <!-- Analyse principale -->
-          <div class="bg-gray-50 rounded-lg p-4 mb-4">
-            <h4 class="font-semibold mb-2">🔍 Analyse IA</h4>
-            <div class="grid grid-cols-2 gap-3 text-sm">
-              <div><strong>Catégorie:</strong> ${this.getCategoryLabel(analysis.category)}</div>
-              <div><strong>Confiance:</strong> 
-                <span class="text-${confidenceColor}-600 font-semibold">
-                  ${Math.round(result.matching_confidence * 100)}%
-                </span>
-              </div>
-              <div><strong>Titre:</strong> ${analysis.extracted_data.title || 'Non détecté'}</div>
-              <div><strong>Auteur/Artiste:</strong> ${analysis.extracted_data.artist_author || 'Non détecté'}</div>
-              <div><strong>Année:</strong> ${analysis.extracted_data.year || 'Non détectée'}</div>
-              <div><strong>Rareté:</strong> ${this.getRarityLabel(analysis.estimated_rarity)}</div>
-            </div>
+        </div>
+        
+        <div class="bg-blue-50 rounded-lg p-4 mb-4">
+          <h4 class="font-semibold mb-2">🔍 Requêtes de recherche générées:</h4>
+          <div class="flex flex-wrap gap-1">
+            ${(analysis.search_queries || []).map(query => 
+              `<span class="px-2 py-1 bg-blue-200 text-blue-800 text-xs rounded-full">${query}</span>`
+            ).join('')}
           </div>
-
-          <!-- Évaluations de prix -->
-          ${evaluations.length > 0 ? `
-            <div class="bg-green-50 rounded-lg p-4 mb-4">
-              <h4 class="font-semibold mb-2">💰 Évaluations (${evaluations.length} sources)</h4>
-              <div class="text-2xl font-bold text-green-800 mb-2">
-                ${this.formatCurrency(avgPrice)} CAD
-              </div>
-              <div class="grid grid-cols-1 gap-2 text-sm">
-                ${evaluations.map(eval => `
-                  <div class="flex justify-between">
-                    <span>${this.getSourceLabel(eval.evaluation_source)}:</span>
-                    <span class="font-semibold">${this.formatCurrency(eval.estimated_value || 0)}</span>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          ` : `
-            <div class="bg-yellow-50 rounded-lg p-4 mb-4">
-              <h4 class="font-semibold mb-2">⚠️ Aucune évaluation trouvée</h4>
-              <p class="text-sm text-yellow-800">
-                Aucune source n'a pu évaluer cet item. Vérifiez l'orthographe ou essayez avec plus d'informations.
-              </p>
-            </div>
-          `}
-
-          <!-- Insights marché -->
-          <div class="bg-blue-50 rounded-lg p-4 mb-4">
-            <h4 class="font-semibold mb-2">📊 Insights Marché</h4>
-            <div class="text-sm space-y-1">
-              <div><strong>Évaluation rareté:</strong> ${insights.rarity_assessment}</div>
-              <div><strong>Tendance:</strong> ${this.getTrendLabel(insights.market_trend)}</div>
-              <div><strong>Demande estimée:</strong> ${this.getDemandLabel(insights.estimated_demand)}</div>
-              <div><strong>Ventes comparables:</strong> ${insights.comparable_sales} items</div>
-            </div>
-          </div>
-
-          <!-- Suggestions -->
-          ${result.suggested_improvements.length > 0 ? `
-            <div class="bg-purple-50 rounded-lg p-4">
-              <h4 class="font-semibold mb-2">💡 Suggestions</h4>
-              <ul class="text-sm space-y-1">
-                ${result.suggested_improvements.map(suggestion => `
-                  <li><i class="fas fa-lightbulb text-yellow-500 mr-2"></i>${suggestion}</li>
-                `).join('')}
-              </ul>
-            </div>
-          ` : ''}
-
+        </div>
+        
+        <div class="text-center">
+          <button onclick="this.parentElement.parentElement.parentElement.parentElement.remove()" 
+                  class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+            Fermer
+          </button>
         </div>
       </div>
-    `;
+    </div>`;
 
-    document.body.appendChild(resultModal);
+    document.body.appendChild(modal);
     
     // Fermer en cliquant à l'extérieur
-    resultModal.addEventListener('click', (e) => {
-      if (e.target === resultModal) {
-        resultModal.remove();
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.remove();
       }
     });
-
-    this.showNotification('Évaluation intelligente terminée !', 'success');
   }
 
-  // Helpers pour l'affichage
-  getRarityLabel(rarity) {
-    const labels = {
-      'ultra_rare': '💎 Ultra Rare',
-      'very_rare': '💍 Très Rare',
-      'rare': '🔹 Rare',
-      'uncommon': '🔸 Peu Commun',
-      'common': '⚪ Commun'
-    };
-    return labels[rarity] || rarity;
+  async loadStats() {
+    try {
+      const response = await axios.get('/api/stats');
+      if (response.data.success) {
+        const stats = response.data.stats;
+        document.getElementById('totalItems').textContent = stats.total_items || 0;
+        document.getElementById('analyzedItems').textContent = stats.analyzed_items || 0;
+        document.getElementById('totalValue').textContent = this.formatCurrency(stats.total_value || 0);
+      }
+    } catch (error) {
+      console.error('Erreur chargement stats:', error);
+    }
   }
 
-  getSourceLabel(source) {
-    const labels = {
-      'ebay_sold_listings': 'eBay Vendus',
-      'discogs': 'Discogs',
-      'google_books': 'Google Books',
-      'abebooks': 'AbeBooks',
-      'enhanced_ai': 'IA Avancée'
-    };
-    return labels[source] || source;
+  async loadItems() {
+    try {
+      const response = await axios.get('/api/items?per_page=5');
+      if (response.data.success) {
+        console.log('Items chargés:', response.data.items.length);
+        this.currentItems = response.data.items;
+      }
+    } catch (error) {
+      console.error('Erreur chargement items:', error);
+    }
   }
 
-  getTrendLabel(trend) {
-    const labels = {
-      'increasing': '📈 En hausse',
-      'stable': '➡️ Stable', 
-      'decreasing': '📉 En baisse'
-    };
-    return labels[trend] || trend;
-  }
-
-  getDemandLabel(demand) {
-    const labels = {
-      'high': '🔥 Élevée',
-      'medium': '🟡 Modérée',
-      'low': '🔵 Faible'
-    };
-    return labels[demand] || demand;
+  formatCurrency(amount) {
+    return new Intl.NumberFormat('fr-CA', {
+      style: 'currency',
+      currency: 'CAD'
+    }).format(amount);
   }
 
   showNotification(message, type = 'info') {
-    // Créer notification toast
     const notification = document.createElement('div');
-    notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full`;
+    notification.className = 'fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transform transition-all duration-300';
     
     const colors = {
       success: 'bg-green-500 text-white',
@@ -889,38 +356,744 @@ class CollectionEvaluator {
       info: 'bg-blue-500 text-white'
     };
     
-    notification.className += ` ${colors[type] || colors.info}`;
-    
-    notification.innerHTML = `
-      <div class="flex items-center space-x-2">
-        <i class="fas ${type === 'success' ? 'fa-check-circle' : 
-                       type === 'error' ? 'fa-exclamation-circle' :
-                       type === 'warning' ? 'fa-exclamation-triangle' :
-                       'fa-info-circle'}"></i>
-        <span>${message}</span>
-      </div>
-    `;
+    notification.className += ' ' + (colors[type] || colors.info);
+    notification.innerHTML = '<i class="fas fa-info-circle mr-2"></i>' + message;
     
     document.body.appendChild(notification);
     
-    // Animation d'entrée
     setTimeout(() => {
-      notification.classList.remove('translate-x-full');
-    }, 100);
-    
-    // Auto-suppression
-    setTimeout(() => {
-      notification.classList.add('translate-x-full');
-      setTimeout(() => {
-        if (notification.parentNode) {
-          notification.parentNode.removeChild(notification);
-        }
-      }, 300);
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
     }, 3000);
+  }
+
+  // ===== FONCTIONNALITÉS D'IMPORT AVANCÉES COMPLÈTES =====
+
+  // Import CSV Simple avec validation avancée
+  async handleCSVImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      this.showNotification('❌ Sélectionnez un fichier CSV valide', 'error');
+      return;
+    }
+
+    this.showNotification('📊 Analyse du fichier CSV...', 'info');
+    
+    try {
+      const content = await this.readFileAsText(file);
+      const { data, errors, suggestions } = this.parseAndValidateCSV(content);
+      
+      if (errors.length > 0) {
+        this.showValidationResults(errors, suggestions, data);
+        return;
+      }
+
+      // Traitement des données
+      const results = await this.processCSVData(data, false);
+      this.showImportResults(results, 'CSV');
+      
+    } catch (error) {
+      console.error('Erreur import CSV:', error);
+      this.showNotification('❌ Erreur lors de l\'import CSV', 'error');
+    }
+  }
+
+  // Import ZIP + Images avec CSV metadata
+  async handleZIPImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.zip')) {
+      this.showNotification('❌ Sélectionnez un fichier ZIP valide', 'error');
+      return;
+    }
+
+    this.showNotification('📦 Extraction du fichier ZIP...', 'info');
+    
+    try {
+      // Utiliser JSZip (via CDN)
+      const zip = new JSZip();
+      const zipContent = await zip.loadAsync(file);
+      
+      // Rechercher le fichier CSV de métadonnées
+      const csvFile = Object.keys(zipContent.files).find(name => 
+        name.toLowerCase().endsWith('.csv') && !zipContent.files[name].dir
+      );
+      
+      if (!csvFile) {
+        this.showNotification('❌ Aucun fichier CSV de métadonnées trouvé dans le ZIP', 'error');
+        return;
+      }
+
+      // Lire les métadonnées CSV
+      const csvContent = await zipContent.files[csvFile].async('string');
+      const { data, errors, suggestions } = this.parseAndValidateCSV(csvContent);
+      
+      if (errors.length > 0) {
+        this.showValidationResults(errors, suggestions, data, 'ZIP');
+        return;
+      }
+
+      // Extraire et associer les images
+      const imageFiles = Object.keys(zipContent.files).filter(name => 
+        /\.(jpg|jpeg|png|webp|gif)$/i.test(name) && !zipContent.files[name].dir
+      );
+
+      this.showNotification(`📸 ${imageFiles.length} images trouvées, traitement...`, 'info');
+
+      // Associer images aux données CSV
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        // Chercher image correspondante (par nom ou index)
+        const matchingImage = imageFiles.find(imgName => {
+          const baseName = imgName.split('/').pop().split('.')[0];
+          return baseName === row.title?.replace(/[^a-zA-Z0-9]/g, '') || 
+                 baseName === `item_${i+1}` || 
+                 imgName.includes(row.title?.substring(0, 10) || '');
+        });
+        
+        if (matchingImage) {
+          const imageBlob = await zipContent.files[matchingImage].async('blob');
+          row.image_url = URL.createObjectURL(imageBlob);
+          row.image_filename = matchingImage.split('/').pop();
+        }
+      }
+
+      // Traitement des données avec images
+      const results = await this.processCSVData(data, true);
+      this.showImportResults(results, 'ZIP');
+      
+    } catch (error) {
+      console.error('Erreur import ZIP:', error);
+      this.showNotification('❌ Erreur lors de l\'extraction ZIP', 'error');
+    }
+  }
+
+  // Import incrémental avec détection de doublons
+  async handleIncrementalImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      this.showNotification('❌ Sélectionnez un fichier CSV pour l\'import incrémental', 'error');
+      return;
+    }
+
+    this.showNotification('🔄 Analyse incrémentale en cours...', 'info');
+    
+    try {
+      const content = await this.readFileAsText(file);
+      const { data, errors, suggestions } = this.parseAndValidateCSV(content);
+      
+      if (errors.length > 0) {
+        this.showValidationResults(errors, suggestions, data, 'INCREMENTAL');
+        return;
+      }
+
+      // Récupérer les items existants pour détection de doublons
+      const existingItems = await this.loadExistingItems();
+      
+      // Détecter les doublons avec algorithme Levenshtein
+      const { newItems, duplicates, updates } = this.detectDuplicates(data, existingItems);
+      
+      // Afficher les résultats de détection
+      this.showDuplicateDetectionResults(newItems, duplicates, updates);
+      
+    } catch (error) {
+      console.error('Erreur import incrémental:', error);
+      this.showNotification('❌ Erreur lors de l\'import incrémental', 'error');
+    }
+  }
+
+  // Afficher sélecteur de templates CSV
+  showTemplateSelector() {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+    
+    const templates = this.getCSVTemplates();
+    
+    modal.innerHTML = `
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+        <div class="p-6">
+          <h3 class="text-xl font-bold text-gray-900 mb-4">
+            <i class="fas fa-download text-blue-600 mr-2"></i>
+            Templates CSV Prédéfinis
+          </h3>
+          
+          <p class="text-sm text-gray-600 mb-4">
+            Choisissez un template adapté à votre type de collection
+          </p>
+          
+          <div class="space-y-2 mb-6">
+            ${templates.map(template => `
+              <button onclick="window.app.downloadTemplate('${template.id}')" 
+                      class="w-full p-3 text-left border rounded-lg hover:bg-gray-50 transition-colors">
+                <div class="flex items-center">
+                  <i class="${template.icon} text-lg mr-3" style="color: ${template.color}"></i>
+                  <div>
+                    <div class="font-semibold">${template.name}</div>
+                    <div class="text-xs text-gray-500">${template.description}</div>
+                    <div class="text-xs text-blue-600 mt-1">${template.columns.length} colonnes: ${template.columns.slice(0,3).join(', ')}...</div>
+                  </div>
+                </div>
+              </button>
+            `).join('')}
+          </div>
+          
+          <div class="flex space-x-2">
+            <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                    class="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">
+              Annuler
+            </button>
+            <button onclick="window.app.downloadTemplate('custom')" 
+                    class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              Template Personnalisé
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.remove();
+      }
+    });
+  }
+
+  // Export CSV complet avec filtres
+  async exportToCSV() {
+    try {
+      this.showNotification('📋 Préparation de l\'export CSV...', 'info');
+      
+      // Récupérer tous les items
+      const response = await axios.get('/api/items?per_page=1000');
+      if (!response.data.success) {
+        throw new Error(response.data.error);
+      }
+
+      const items = response.data.items || [];
+      
+      if (items.length === 0) {
+        this.showNotification('❌ Aucun item à exporter', 'warning');
+        return;
+      }
+
+      // Générer le CSV
+      const csvContent = this.generateCSVContent(items);
+      
+      // Télécharger le fichier
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `collection_export_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      
+      this.showNotification(`✅ Export réussi - ${items.length} items exportés`, 'success');
+      
+    } catch (error) {
+      console.error('Erreur export CSV:', error);
+      this.showNotification('❌ Erreur lors de l\'export', 'error');
+    }
+  }
+
+  // ===== FONCTIONS UTILITAIRES AVANCÉES =====
+
+  // Lire fichier comme texte
+  async readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = (e) => reject(e);
+      reader.readAsText(file, 'UTF-8');
+    });
+  }
+
+  // Parser et valider CSV avec suggestions de correction
+  parseAndValidateCSV(csvContent) {
+    const lines = csvContent.trim().split('\n');
+    if (lines.length < 2) {
+      return { data: [], errors: ['Fichier CSV vide ou invalide'], suggestions: [] };
+    }
+
+    // Détecter le séparateur
+    const separators = [',', ';', '\t', '|'];
+    const separator = separators.find(sep => 
+      lines[0].split(sep).length > 1
+    ) || ',';
+
+    // Parser l'en-tête
+    const headers = lines[0].split(separator).map(h => h.trim().replace(/"/g, ''));
+    const requiredColumns = ['title', 'category'];
+    const optionalColumns = ['author', 'artist', 'year', 'condition', 'description', 'estimated_value'];
+    
+    const errors = [];
+    const suggestions = [];
+    
+    // Vérifier colonnes requises
+    const missingRequired = requiredColumns.filter(col => 
+      !headers.some(header => header.toLowerCase().includes(col.toLowerCase()))
+    );
+    
+    if (missingRequired.length > 0) {
+      errors.push(`Colonnes manquantes: ${missingRequired.join(', ')}`);
+      suggestions.push('Ajoutez au minimum les colonnes: title, category');
+    }
+
+    // Parser les données
+    const data = [];
+    for (let i = 1; i < lines.length; i++) {
+      if (lines[i].trim()) {
+        const values = this.parseCSVLine(lines[i], separator);
+        const row = {};
+        
+        headers.forEach((header, index) => {
+          const cleanHeader = header.toLowerCase().replace(/[^a-z]/g, '_');
+          row[cleanHeader] = values[index] || '';
+        });
+        
+        // Validation des données
+        if (!row.title || !row.category) {
+          errors.push(`Ligne ${i + 1}: title et category sont requis`);
+        }
+        
+        data.push(row);
+      }
+    }
+
+    return { data, errors, suggestions };
+  }
+
+  // Parser une ligne CSV en respectant les guillemets
+  parseCSVLine(line, separator) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === separator && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    
+    result.push(current.trim());
+    return result;
+  }
+
+  // Traitement des données CSV
+  async processCSVData(data, hasImages = false) {
+    const results = { processed: 0, errors: 0, items: [] };
+    
+    for (const row of data) {
+      try {
+        // Envoyer à l'API pour sauvegarde
+        const response = await axios.post('/api/import-item', {
+          ...row,
+          has_image: hasImages && !!row.image_url,
+          image_data: row.image_url || null
+        });
+        
+        if (response.data.success) {
+          results.processed++;
+          results.items.push(row);
+        } else {
+          results.errors++;
+        }
+      } catch (error) {
+        results.errors++;
+        console.error('Erreur traitement ligne:', error);
+      }
+    }
+    
+    return results;
+  }
+
+  // Charger items existants pour détection doublons
+  async loadExistingItems() {
+    try {
+      const response = await axios.get('/api/items?per_page=1000');
+      return response.data.success ? response.data.items : [];
+    } catch (error) {
+      console.error('Erreur chargement items existants:', error);
+      return [];
+    }
+  }
+
+  // Détection de doublons avec distance Levenshtein
+  detectDuplicates(newData, existingItems) {
+    const newItems = [];
+    const duplicates = [];
+    const updates = [];
+    const threshold = 0.8; // Seuil de similarité
+    
+    for (const newItem of newData) {
+      let bestMatch = null;
+      let maxSimilarity = 0;
+      
+      for (const existingItem of existingItems) {
+        const similarity = this.calculateSimilarity(
+          newItem.title || '', 
+          existingItem.title || ''
+        );
+        
+        if (similarity > maxSimilarity) {
+          maxSimilarity = similarity;
+          bestMatch = existingItem;
+        }
+      }
+      
+      if (maxSimilarity > threshold) {
+        duplicates.push({
+          newItem,
+          existingItem: bestMatch,
+          similarity: maxSimilarity
+        });
+      } else {
+        newItems.push(newItem);
+      }
+    }
+    
+    return { newItems, duplicates, updates };
+  }
+
+  // Calcul de similarité (Distance Levenshtein normalisée)
+  calculateSimilarity(str1, str2) {
+    const s1 = str1.toLowerCase().trim();
+    const s2 = str2.toLowerCase().trim();
+    
+    if (s1 === s2) return 1.0;
+    
+    const maxLength = Math.max(s1.length, s2.length);
+    if (maxLength === 0) return 1.0;
+    
+    const distance = this.levenshteinDistance(s1, s2);
+    return 1.0 - (distance / maxLength);
+  }
+
+  // Algorithme de distance Levenshtein
+  levenshteinDistance(str1, str2) {
+    const matrix = [];
+    
+    for (let i = 0; i <= str2.length; i++) {
+      matrix[i] = [i];
+    }
+    
+    for (let j = 0; j <= str1.length; j++) {
+      matrix[0][j] = j;
+    }
+    
+    for (let i = 1; i <= str2.length; i++) {
+      for (let j = 1; j <= str1.length; j++) {
+        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1, // substitution
+            matrix[i][j - 1] + 1,     // insertion
+            matrix[i - 1][j] + 1      // deletion
+          );
+        }
+      }
+    }
+    
+    return matrix[str2.length][str1.length];
+  }
+
+  // Obtenir les templates CSV prédéfinis
+  getCSVTemplates() {
+    return [
+      {
+        id: 'books',
+        name: 'Livres et Publications',
+        description: 'Romans, essais, magazines, BD',
+        icon: 'fas fa-book',
+        color: '#10B981',
+        columns: ['title', 'author', 'publisher', 'year', 'isbn', 'category', 'condition', 'language', 'pages', 'estimated_value', 'notes']
+      },
+      {
+        id: 'music',
+        name: 'Musique et Disques', 
+        description: 'Vinyles, CD, cassettes',
+        icon: 'fas fa-music',
+        color: '#8B5CF6',
+        columns: ['title', 'artist', 'album', 'year', 'label', 'category', 'format', 'condition', 'limited_edition', 'estimated_value', 'notes']
+      },
+      {
+        id: 'cards',
+        name: 'Cartes de Collection',
+        description: 'Sports, Pokémon, Magic, etc.',
+        icon: 'fas fa-id-card',
+        color: '#F59E0B',
+        columns: ['title', 'set_name', 'year', 'rarity', 'card_number', 'category', 'condition', 'graded', 'grade_company', 'estimated_value', 'notes']
+      },
+      {
+        id: 'art',
+        name: 'Art et Objets d\'Art',
+        description: 'Peintures, sculptures, artisanat',
+        icon: 'fas fa-palette',
+        color: '#EF4444',
+        columns: ['title', 'artist', 'medium', 'dimensions', 'year', 'category', 'condition', 'provenance', 'authentication', 'estimated_value', 'notes']
+      },
+      {
+        id: 'collectibles',
+        name: 'Objets de Collection',
+        description: 'Jouets, figurines, antiquités',
+        icon: 'fas fa-gem',
+        color: '#3B82F6',
+        columns: ['title', 'manufacturer', 'series', 'year', 'material', 'category', 'condition', 'original_packaging', 'limited_edition', 'estimated_value', 'notes']
+      }
+    ];
+  }
+
+  // Télécharger template CSV
+  downloadTemplate(templateId) {
+    const templates = this.getCSVTemplates();
+    const template = templates.find(t => t.id === templateId);
+    
+    let csvContent;
+    if (templateId === 'custom') {
+      // Template personnalisé
+      csvContent = 'title,category,author_or_artist,year,condition,description,estimated_value,notes\n';
+      csvContent += '"Exemple Item","books","Auteur Exemple",2023,"Excellent","Description exemple",50.00,"Notes exemple"\n';
+    } else if (template) {
+      csvContent = template.columns.join(',') + '\n';
+      // Ligne d'exemple
+      const examples = {
+        'books': ['"Les Anciens Canadiens"', '"Philippe Aubert de Gaspé"', '"Beauchemin"', '1863', '"978-1234567890"', '"literature"', '"Good"', '"French"', '300', '150.00', '"Édition originale"'],
+        'music': ['"Abbey Road"', '"The Beatles"', '"Abbey Road"', '1969', '"Apple Records"', '"rock"', '"Vinyl"', '"Near Mint"', '"No"', '500.00', '"Pressing original"'],
+        'cards': ['"Wayne Gretzky Rookie"', '"O-Pee-Chee Hockey"', '1979', '"Rookie"', '"#18"', '"sports"', '"PSA 9"', '"Yes"', '"PSA"', '25000.00', '"Hall of Fame card"'],
+        'art': ['"Paysage d\'automne"', '"Jean-Paul Riopelle"', '"Oil on canvas"', '"24x36 inches"', '1965', '"painting"', '"Excellent"', '"Galerie X"', '"Certificate included"', '150000.00', '"Museum quality"'],
+        'collectibles': ['"Optimus Prime G1"', '"Hasbro"', '"Transformers"', '1984', '"Die-cast metal"', '"toys"', '"Complete"', '"Yes"', '"No"', '350.00', '"Original box included"']
+      };
+      
+      if (examples[templateId]) {
+        csvContent += examples[templateId].join(',') + '\n';
+      }
+    }
+    
+    // Créer et télécharger le fichier
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `template_${templateId}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    
+    // Fermer la modal
+    document.querySelector('.fixed.inset-0').remove();
+    
+    this.showNotification(`✅ Template "${template?.name || 'Personnalisé'}" téléchargé`, 'success');
+  }
+
+  // Générer contenu CSV pour export
+  generateCSVContent(items) {
+    const headers = ['ID', 'Title', 'Category', 'Author/Artist', 'Year', 'Condition', 'Description', 'Estimated Value', 'Created', 'Last Updated'];
+    let csvContent = headers.join(',') + '\n';
+    
+    for (const item of items) {
+      const row = [
+        item.id || '',
+        `"${(item.title || '').replace(/"/g, '""')}"`,
+        `"${(item.category || '').replace(/"/g, '""')}"`,
+        `"${(item.author || item.artist || '').replace(/"/g, '""')}"`,
+        item.year || '',
+        `"${(item.condition || '').replace(/"/g, '""')}"`,
+        `"${(item.description || '').replace(/"/g, '""')}"`,
+        item.estimated_value || '0.00',
+        item.created_at || '',
+        item.updated_at || ''
+      ];
+      csvContent += row.join(',') + '\n';
+    }
+    
+    return csvContent;
+  }
+
+  // Afficher résultats de validation
+  showValidationResults(errors, suggestions, data, importType = 'CSV') {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+    
+    modal.innerHTML = `
+      <div class="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-96 overflow-y-auto">
+        <div class="p-6">
+          <h3 class="text-xl font-bold text-red-600 mb-4">
+            <i class="fas fa-exclamation-triangle mr-2"></i>
+            Erreurs de Validation - ${importType}
+          </h3>
+          
+          <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <h4 class="font-semibold text-red-800 mb-2">Erreurs détectées:</h4>
+            <ul class="text-sm text-red-700 space-y-1">
+              ${errors.map(error => `<li>• ${error}</li>`).join('')}
+            </ul>
+          </div>
+          
+          ${suggestions.length > 0 ? `
+          <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+            <h4 class="font-semibold text-yellow-800 mb-2">Suggestions:</h4>
+            <ul class="text-sm text-yellow-700 space-y-1">
+              ${suggestions.map(suggestion => `<li>• ${suggestion}</li>`).join('')}
+            </ul>
+          </div>
+          ` : ''}
+          
+          <div class="flex space-x-2">
+            <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                    class="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">
+              Fermer
+            </button>
+            <button onclick="window.app.downloadTemplate('custom')" 
+                    class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              Télécharger Template
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+  }
+
+  // Afficher résultats d'import
+  showImportResults(results, type) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+    
+    const successRate = results.processed / (results.processed + results.errors) * 100;
+    
+    modal.innerHTML = `
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+        <div class="p-6">
+          <h3 class="text-xl font-bold text-green-600 mb-4">
+            <i class="fas fa-check-circle mr-2"></i>
+            Import ${type} Terminé
+          </h3>
+          
+          <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+            <div class="grid grid-cols-2 gap-4 text-sm">
+              <div><strong>Traités:</strong> ${results.processed}</div>
+              <div><strong>Erreurs:</strong> ${results.errors}</div>
+              <div><strong>Succès:</strong> ${Math.round(successRate)}%</div>
+              <div><strong>Total:</strong> ${results.processed + results.errors}</div>
+            </div>
+          </div>
+          
+          <button onclick="this.parentElement.parentElement.parentElement.remove(); window.app.loadStats(); window.app.loadItems();" 
+                  class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+            Fermer et Actualiser
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+  }
+
+  // Afficher résultats détection de doublons
+  showDuplicateDetectionResults(newItems, duplicates, updates) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+    
+    modal.innerHTML = `
+      <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-96 overflow-y-auto">
+        <div class="p-6">
+          <h3 class="text-xl font-bold text-orange-600 mb-4">
+            <i class="fas fa-search mr-2"></i>
+            Détection de Doublons - Résultats
+          </h3>
+          
+          <div class="grid grid-cols-3 gap-4 mb-4">
+            <div class="bg-green-50 p-3 rounded-lg text-center">
+              <div class="text-2xl font-bold text-green-600">${newItems.length}</div>
+              <div class="text-sm text-green-700">Nouveaux items</div>
+            </div>
+            <div class="bg-orange-50 p-3 rounded-lg text-center">
+              <div class="text-2xl font-bold text-orange-600">${duplicates.length}</div>
+              <div class="text-sm text-orange-700">Doublons détectés</div>
+            </div>
+            <div class="bg-blue-50 p-3 rounded-lg text-center">
+              <div class="text-2xl font-bold text-blue-600">${updates.length}</div>
+              <div class="text-sm text-blue-700">Mises à jour</div>
+            </div>
+          </div>
+          
+          ${duplicates.length > 0 ? `
+          <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+            <h4 class="font-semibold text-yellow-800 mb-2">Doublons détectés:</h4>
+            <div class="space-y-2 max-h-32 overflow-y-auto">
+              ${duplicates.slice(0, 5).map(dup => `
+                <div class="text-sm">
+                  <strong>Nouveau:</strong> "${dup.newItem.title}" 
+                  <strong>Similaire à:</strong> "${dup.existingItem.title}" 
+                  (${Math.round(dup.similarity * 100)}% similarité)
+                </div>
+              `).join('')}
+              ${duplicates.length > 5 ? `<div class="text-xs text-gray-500">... et ${duplicates.length - 5} autres</div>` : ''}
+            </div>
+          </div>
+          ` : ''}
+          
+          <div class="flex space-x-2">
+            <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                    class="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">
+              Annuler
+            </button>
+            ${newItems.length > 0 ? `
+            <button onclick="window.app.processIncrementalImport(${JSON.stringify(newItems).replace(/"/g, '&quot;')}, 'new')" 
+                    class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+              Importer Nouveaux (${newItems.length})
+            </button>
+            ` : ''}
+            ${duplicates.length > 0 ? `
+            <button onclick="window.app.processIncrementalImport(${JSON.stringify(duplicates).replace(/"/g, '&quot;')}, 'duplicates')" 
+                    class="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">
+              Forcer Doublons (${duplicates.length})
+            </button>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+  }
+
+  // Traitement final import incrémental
+  async processIncrementalImport(items, mode) {
+    try {
+      let itemsToProcess = items;
+      
+      if (mode === 'duplicates') {
+        itemsToProcess = items.map(dup => dup.newItem);
+      }
+      
+      const results = await this.processCSVData(itemsToProcess, false);
+      
+      // Fermer modal précédente
+      document.querySelector('.fixed.inset-0').remove();
+      
+      this.showImportResults(results, 'Incrémental');
+      
+    } catch (error) {
+      console.error('Erreur traitement incrémental final:', error);
+      this.showNotification('❌ Erreur lors du traitement final', 'error');
+    }
   }
 }
 
-// Initialisation de l'application
+// Initialisation
 window.addEventListener('DOMContentLoaded', () => {
   window.app = new CollectionEvaluator();
 });

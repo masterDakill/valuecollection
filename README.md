@@ -6,17 +6,20 @@
 - **Features**: Import/Export avancé, Évaluation IA par image/vidéo/texte, Base de données persistante, Interface intuitive
 
 ## 🌐 URLs
-- **Production**: https://ab90ed93.evaluateur-collection-pro.pages.dev
+- **Production Principal**: https://e92ff36d.evaluateur-collection-pro.pages.dev
+- **Production Backup**: https://89382666.evaluateur-collection-pro.pages.dev
 - **Développement Local**: http://localhost:3000
-- **GitHub**: *À configurer*
+- **GitHub**: https://github.com/masterDakill/ImageToValue_Analyser
 
 ## 🎯 Fonctionnalités Principales
 
-### ✅ **Évaluation Intelligente Multi-Input**
-- **Analyse par image/vidéo** : Upload de photos ou vidéos pour reconnaissance automatique
+### 🧠 **Système Multi-Expert IA - NOUVEAU !**
+- **3 Experts IA Spécialisés** : OpenAI Vision, Claude Collections, Gemini Comparative
+- **Consolidation Intelligente** : Analyse de consensus avec pourcentage de confiance
+- **Évaluation par image/vidéo** : Upload de photos ou vidéos pour reconnaissance automatique
 - **Évaluation par texte** : Saisie libre "Abbey Road The Beatles" pour analyse contextuelle
-- **IA GPT-4 Vision** : Détection automatique de catégorie, rareté, et données extraites
-- **APIs multi-sources** : eBay, Discogs, Google Books, AbeBooks pour pricing
+- **Analyse Avancée** : Estimation de valeur, rareté, recommandations d'action
+- **APIs multi-sources** : eBay, Discogs, Google Books, AbeBooks pour pricing réel
 
 ### ✅ **Import/Export Avancé - NOUVEAU !**
 - **Import CSV Simple** : Colonnes flexibles avec mapping automatique
@@ -37,6 +40,30 @@
 - **Vue grille/liste** avec pagination optimisée
 - **Notifications UX** pour feedback utilisateur
 - **Responsive design** TailwindCSS
+
+## 🧠 Système Multi-Expert IA
+
+### **Architecture d'Experts Spécialisés**
+1. **🔍 OpenAI Vision Expert**
+   - Analyse visuelle détaillée d'images de collections
+   - Reconnaissance d'objets, texte, et détails fins
+   - Évaluation de condition et authenticité visuelle
+
+2. **📚 Claude Collection Expert**
+   - Expertise spécialisée en objets de collection historiques
+   - Connaissance culturelle et contextuelle approfondie
+   - Évaluation de rareté et provenance détaillée
+
+3. **⚖️ Gemini Comparative Expert**
+   - Analyse comparative de marché en temps réel
+   - Comparaisons avec ventes récentes similaires
+   - Tendances et évaluations de liquidité
+
+### **Consolidation Intelligente**
+- **Calcul de consensus** : Agrégation pondérée des opinions d'experts
+- **Scores de confiance** : Évaluation de la fiabilité des estimations
+- **Recommandations d'action** : Suggestions personnalisées basées sur l'analyse
+- **Facteurs de rareté** : Analyse multi-critères pour déterminer la rareté
 
 ## 🏗️ Data Architecture
 
@@ -63,7 +90,7 @@ Input (Image/Vidéo/Texte) → Smart Analyzer → Multi-API Evaluator → D1 Dat
 - **Backend** : Hono Framework + TypeScript + Cloudflare Workers
 - **Frontend** : HTML5 + TailwindCSS + Vanilla JavaScript optimisé  
 - **Base de données** : Cloudflare D1 (SQLite distribuée)
-- **IA/ML** : OpenAI GPT-4 Vision API
+- **IA/ML** : Système Multi-Expert (OpenAI GPT-4 Vision, Claude-3, Gemini Pro Vision)
 - **APIs** : eBay, Discogs, Google Books, AbeBooks
 - **Déploiement** : Cloudflare Pages avec CI/CD
 - **Développement** : Vite + PM2 + Wrangler CLI
@@ -89,7 +116,7 @@ Input (Image/Vidéo/Texte) → Smart Analyzer → Multi-API Evaluator → D1 Dat
 
 ### **Platform** : Cloudflare Pages
 ### **Status** : ✅ Active et Fonctionnel
-### **Last Updated** : 17 octobre 2025
+### **Last Updated** : 19 octobre 2025 - Système Multi-Expert IA Déployé
 
 ### **Configuration de Déploiement**
 ```bash
@@ -143,4 +170,4 @@ curl -X POST http://localhost:3000/api/smart-evaluate -d '{"text_input":"test"}'
 **Développé pour Mathieu Chamberland** - Investisseur Immobilier & Entrepreneur  
 *Spécialisé en gestion de propriétés locatives et collections d'objets de valeur*
 
-🔗 **Accès Direct** : https://ab90ed93.evaluateur-collection-pro.pages.dev
+🔗 **Accès Direct** : https://e92ff36d.evaluateur-collection-pro.pages.dev
