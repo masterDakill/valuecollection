@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { MultiExpertAISystem } from './ai-experts'
+import { photoBooksRouter } from './routes/photo-books';
+import { photosRouter } from './routes/photos';
 // Types pour les bindings Cloudflare
 type Bindings = {
   DB: D1Database;
@@ -60,7 +62,7 @@ app.get('/', async (c) => {
     <!-- Header -->
     <header class="bg-white shadow-sm border-b">
         <div class="max-w-7xl mx-auto px-4 py-4">
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center space-x-4">
                     <i class="fas fa-gem text-blue-600 text-3xl"></i>
                     <div>
@@ -75,10 +77,30 @@ app.get('/', async (c) => {
                     </div>
                 </div>
             </div>
+
+            <!-- Navigation Tabs -->
+            <nav class="flex space-x-2 border-b border-gray-200 pb-2">
+                <button id="navDatabase" class="px-4 py-2 rounded-t-lg bg-blue-600 text-white font-medium">
+                    <i class="fas fa-database mr-2"></i>Base de Données
+                </button>
+                <button id="navPhotos" class="px-4 py-2 rounded-t-lg text-gray-600 hover:bg-gray-100 font-medium">
+                    <i class="fas fa-camera mr-2"></i>Photos & Livres
+                </button>
+                <button id="navRecommendations" class="px-4 py-2 rounded-t-lg text-gray-600 hover:bg-gray-100 font-medium">
+                    <i class="fas fa-star mr-2"></i>Recommandations
+                </button>
+                <button id="navAnnonce" class="px-4 py-2 rounded-t-lg text-gray-600 hover:bg-gray-100 font-medium">
+                    <i class="fas fa-bullhorn mr-2"></i>Créer Annonce
+                </button>
+                <button id="navComparables" class="px-4 py-2 rounded-t-lg text-gray-600 hover:bg-gray-100 font-medium">
+                    <i class="fas fa-balance-scale mr-2"></i>Comparables
+                </button>
+            </nav>
         </div>
     </header>
 
-    <!-- Dashboard Summary -->
+    <!-- ========== PAGE: BASE DE DONNÉES ========== -->
+    <div id="pageDatabase" class="page-content">
     <div class="max-w-7xl mx-auto px-4 py-6">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             
@@ -228,7 +250,293 @@ app.get('/', async (c) => {
             </div>
         </div>
 
-        <!-- Liste des items avec Import Avancé RESTAURÉ -->
+        <!-- Liste des items continue... -->
+    </div>
+    </div>
+    <!-- FIN PAGE: BASE DE DONNÉES -->
+
+    <!-- ========== PAGE: PHOTOS & LIVRES ========== -->
+    <div id="pagePhotos" class="page-content hidden">
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <!-- Section Photos -->
+        <div class="bg-white rounded-lg shadow mb-8">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-xl font-semibold">
+                        <i class="fas fa-images mr-2 text-purple-600"></i>
+                        Galerie de Photos Analysées
+                    </h2>
+                    <div class="text-sm text-gray-600">
+                        <span id="photosCount">0</span> photos
+                    </div>
+                </div>
+
+                <!-- Grille de photos -->
+                <div id="photosGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    <!-- Rempli dynamiquement par JS -->
+                </div>
+
+                <!-- Message vide -->
+                <div id="photosEmpty" class="text-center py-12 text-gray-500">
+                    <i class="fas fa-camera text-6xl mb-4 text-gray-300"></i>
+                    <p class="text-lg mb-2">Aucune photo analysée</p>
+                    <p class="text-sm">Uploadez une photo de vos livres pour commencer</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Détail Photo -->
+        <div id="photoModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
+            <div class="min-h-screen px-4 py-8">
+                <div class="max-w-6xl mx-auto bg-white rounded-lg shadow-xl">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between p-6 border-b">
+                        <h3 class="text-xl font-semibold">
+                            <i class="fas fa-image mr-2 text-purple-600"></i>
+                            Détails de la Photo
+                        </h3>
+                        <button id="closePhotoModal" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-times text-2xl"></i>
+                        </button>
+                    </div>
+
+                    <!-- Contenu -->
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <!-- Image -->
+                            <div>
+                                <img id="modalPhotoImg" src="" alt="Photo" class="w-full rounded-lg shadow-lg">
+                                <div class="mt-4 p-4 bg-gray-50 rounded-lg">
+                                    <div class="text-sm text-gray-600">
+                                        <p><strong>Date:</strong> <span id="modalPhotoDate"></span></p>
+                                        <p><strong>Livres détectés:</strong> <span id="modalPhotoCount"></span></p>
+                                        <p><strong>Valeur totale:</strong> <span id="modalPhotoValue"></span></p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Liste des livres -->
+                            <div>
+                                <h4 class="text-lg font-semibold mb-4">
+                                    <i class="fas fa-book mr-2"></i>
+                                    Livres Détectés
+                                </h4>
+                                <div id="modalBooksList" class="space-y-3 max-h-96 overflow-y-auto">
+                                    <!-- Rempli dynamiquement -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="flex items-center justify-end space-x-3 p-6 border-t">
+                        <button id="deletePhotoBtn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                            <i class="fas fa-trash mr-2"></i>
+                            Supprimer Photo
+                        </button>
+                        <button id="exportPhotoBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            <i class="fas fa-download mr-2"></i>
+                            Exporter CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+    <!-- FIN PAGE: PHOTOS & LIVRES -->
+
+    <!-- ========== PAGE: RECOMMANDATIONS ========== -->
+    <div id="pageRecommendations" class="page-content hidden">
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-2xl font-bold mb-6">
+                <i class="fas fa-star text-yellow-500 mr-3"></i>
+                Recommandations Intelligentes
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Recommandations basées sur votre collection -->
+                <div class="border rounded-lg p-6">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fas fa-lightbulb text-blue-500 mr-2"></i>
+                        Suggestions d'Achat
+                    </h3>
+                    <div id="suggestionsAchat" class="space-y-3">
+                        <p class="text-gray-500 text-sm">Analysez votre collection pour obtenir des recommandations personnalisées</p>
+                    </div>
+                </div>
+
+                <!-- Livres à valoriser -->
+                <div class="border rounded-lg p-6">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fas fa-chart-line text-green-500 mr-2"></i>
+                        Opportunités de Vente
+                    </h3>
+                    <div id="opportunitesVente" class="space-y-3">
+                        <p class="text-gray-500 text-sm">Livres avec forte demande du marché</p>
+                    </div>
+                </div>
+
+                <!-- Livres manquants dans les séries -->
+                <div class="border rounded-lg p-6">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fas fa-puzzle-piece text-purple-500 mr-2"></i>
+                        Compléter vos Séries
+                    </h3>
+                    <div id="seriesIncompletes" class="space-y-3">
+                        <p class="text-gray-500 text-sm">Détection automatique des tomes manquants</p>
+                    </div>
+                </div>
+
+                <!-- Tendances du marché -->
+                <div class="border rounded-lg p-6">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fas fa-fire text-red-500 mr-2"></i>
+                        Tendances Actuelles
+                    </h3>
+                    <div id="tendances" class="space-y-3">
+                        <p class="text-gray-500 text-sm">Ce qui se vend bien en ce moment</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 text-center">
+                <button id="generateRecommendations" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+                    <i class="fas fa-magic mr-2"></i>
+                    Générer Recommandations IA
+                </button>
+            </div>
+        </div>
+    </div>
+    </div>
+    <!-- FIN PAGE: RECOMMANDATIONS -->
+
+    <!-- ========== PAGE: CRÉER ANNONCE ========== -->
+    <div id="pageAnnonce" class="page-content hidden">
+    <div class="max-w-4xl mx-auto px-4 py-6">
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-2xl font-bold mb-6">
+                <i class="fas fa-bullhorn text-blue-600 mr-3"></i>
+                Créer une Annonce de Vente
+            </h2>
+
+            <form id="annonceForm" class="space-y-6">
+                <!-- Sélection livre -->
+                <div>
+                    <label class="block text-sm font-medium mb-2">Sélectionner un livre</label>
+                    <select id="annonceSelectLivre" class="w-full px-4 py-2 border rounded-lg">
+                        <option value="">Choisir dans votre collection...</option>
+                    </select>
+                </div>
+
+                <!-- Titre -->
+                <div>
+                    <label class="block text-sm font-medium mb-2">Titre de l\\'annonce</label>
+                    <input type="text" id="annonceTitre" class="w-full px-4 py-2 border rounded-lg" placeholder="Ex: Rare - Harry Potter Première Edition">
+                </div>
+
+                <!-- Description -->
+                <div>
+                    <label class="block text-sm font-medium mb-2">Description</label>
+                    <textarea id="annonceDescription" rows="6" class="w-full px-4 py-2 border rounded-lg" placeholder="Décrivez l\\'état, l\\'historique, particularités..."></textarea>
+                    <button type="button" id="generateDescription" class="mt-2 px-4 py-2 text-sm bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200">
+                        <i class="fas fa-magic mr-2"></i>Générer avec IA
+                    </button>
+                </div>
+
+                <!-- Prix -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Prix demandé (CAD)</label>
+                        <input type="number" id="annoncePrix" class="w-full px-4 py-2 border rounded-lg" placeholder="0.00">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Prix suggéré</label>
+                        <div class="px-4 py-2 bg-gray-50 border rounded-lg text-gray-600">
+                            <span id="prixSuggere">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Plateformes -->
+                <div>
+                    <label class="block text-sm font-medium mb-2">Publier sur</label>
+                    <div class="flex flex-wrap gap-3">
+                        <label class="flex items-center">
+                            <input type="checkbox" class="mr-2" value="ebay"> eBay
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" class="mr-2" value="facebook"> Facebook Marketplace
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" class="mr-2" value="kijiji"> Kijiji
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" class="mr-2" value="abebooks"> AbeBooks
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Preview -->
+                <div class="border-t pt-6">
+                    <h3 class="font-semibold mb-3">Aperçu de l\\'annonce</h3>
+                    <div id="annoncePreview" class="p-4 bg-gray-50 rounded-lg border min-h-32">
+                        <p class="text-gray-400 text-sm">L\\'aperçu apparaîtra ici...</p>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex justify-end space-x-3">
+                    <button type="button" class="px-6 py-2 border rounded-lg hover:bg-gray-50">Sauvegarder Brouillon</button>
+                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        <i class="fas fa-paper-plane mr-2"></i>Publier Annonce
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    </div>
+    <!-- FIN PAGE: CRÉER ANNONCE -->
+
+    <!-- ========== PAGE: COMPARABLES ========== -->
+    <div id="pageComparables" class="page-content hidden">
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-2xl font-bold mb-6">
+                <i class="fas fa-balance-scale text-green-600 mr-3"></i>
+                Ventes Comparables
+            </h2>
+
+            <!-- Recherche -->
+            <div class="mb-6">
+                <div class="flex space-x-3">
+                    <input type="text" id="searchComparables" class="flex-1 px-4 py-2 border rounded-lg" placeholder="Rechercher un livre pour voir les ventes comparables...">
+                    <button id="btnSearchComparables" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        <i class="fas fa-search mr-2"></i>Rechercher
+                    </button>
+                </div>
+            </div>
+
+            <!-- Résultats -->
+            <div id="comparablesResults" class="space-y-4">
+                <div class="text-center py-12 text-gray-400">
+                    <i class="fas fa-search text-6xl mb-4"></i>
+                    <p>Recherchez un livre pour voir les ventes récentes similaires</p>
+                </div>
+            </div>
+
+            <!-- Graphique des prix -->
+            <div class="mt-8">
+                <h3 class="text-lg font-semibold mb-4">Évolution des Prix</h3>
+                <canvas id="priceChart" class="w-full" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+    </div>
+    <!-- FIN PAGE: COMPARABLES -->
+
+        <!-- Liste des items avec Import Avancé RESTAURÉ (reste dans page Database) -->
         <div class="bg-white rounded-lg shadow">
             <div class="p-6 border-b">
                 <div class="flex items-center justify-between">
@@ -323,6 +631,7 @@ class CollectionEvaluator {
     this.setupEventListeners();
     this.loadStats();
     this.loadItems();
+    this.setupPhotoTabs();
   }
 
   setupEventListeners() {
@@ -403,6 +712,55 @@ class CollectionEvaluator {
     const exportBtn = document.getElementById('exportData');
     if (exportBtn) {
       exportBtn.addEventListener('click', () => this.exportToCSV());
+    }
+
+    // Navigation entre pages
+    const navDatabase = document.getElementById('navDatabase');
+    const navPhotos = document.getElementById('navPhotos');
+    const navRecommendations = document.getElementById('navRecommendations');
+    const navAnnonce = document.getElementById('navAnnonce');
+    const navComparables = document.getElementById('navComparables');
+
+    if (navDatabase) {
+      navDatabase.addEventListener('click', () => this.showPage('Database'));
+    }
+    if (navPhotos) {
+      navPhotos.addEventListener('click', () => this.showPage('Photos'));
+    }
+    if (navRecommendations) {
+      navRecommendations.addEventListener('click', () => this.showPage('Recommendations'));
+    }
+    if (navAnnonce) {
+      navAnnonce.addEventListener('click', () => this.showPage('Annonce'));
+    }
+    if (navComparables) {
+      navComparables.addEventListener('click', () => this.showPage('Comparables'));
+    }
+
+    // Modal photo
+    const closePhotoModal = document.getElementById('closePhotoModal');
+    if (closePhotoModal) {
+      closePhotoModal.addEventListener('click', () => this.closePhotoModal());
+    }
+
+    const deletePhotoBtn = document.getElementById('deletePhotoBtn');
+    if (deletePhotoBtn) {
+      deletePhotoBtn.addEventListener('click', () => this.deleteCurrentPhoto());
+    }
+
+    const exportPhotoBtn = document.getElementById('exportPhotoBtn');
+    if (exportPhotoBtn) {
+      exportPhotoBtn.addEventListener('click', () => this.exportPhotoBooks());
+    }
+
+    // Fermer modal en cliquant à l\\'extérieur
+    const photoModal = document.getElementById('photoModal');
+    if (photoModal) {
+      photoModal.addEventListener('click', (e) => {
+        if (e.target === photoModal) {
+          this.closePhotoModal();
+        }
+      });
     }
   }
 
@@ -1231,18 +1589,51 @@ class CollectionEvaluator {
       // Convertir le fichier en URL data
       const mediaUrl = await this.fileToDataUrl(this.selectedMedia);
       const isVideo = this.selectedMedia.type.startsWith('video/');
+      const isImage = this.selectedMedia.type.startsWith('image/');
 
-      const response = await axios.post('/api/smart-evaluate', {
-        imageUrl: isVideo ? null : mediaUrl,
-        videoUrl: isVideo ? mediaUrl : null,
-        filename: this.selectedMedia.name
-      });
+      // Si c'est une image, utiliser le nouveau endpoint de détection multi-livres
+      if (isImage) {
+        this.showNotification('🔍 Analyse en cours avec détection multi-livres...', 'info');
 
-      if (response.data.success) {
-        this.displayEvaluationResult(response.data, 'Fichier: ' + this.selectedMedia.name);
-        this.showNotification('✅ Analyse du fichier terminée !', 'success');
+        const response = await fetch('/api/photos/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: mediaUrl,
+            options: {
+              maxItems: 30,
+              useCache: true
+            }
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          this.showNotification(\`✅ \${result.total_detected} livres détectés !\`, 'success');
+
+          // Basculer vers l'onglet Photos et afficher le détail
+          this.showPage('Photos');
+          setTimeout(() => {
+            this.showPhotoDetail(result.photo_id);
+          }, 500);
+        } else {
+          this.showNotification('❌ Erreur analyse: ' + result.error?.message, 'error');
+        }
       } else {
-        this.showNotification('Erreur: ' + response.data.error, 'error');
+        // Pour les vidéos ou autres médias, utiliser l'ancien endpoint
+        const response = await axios.post('/api/smart-evaluate', {
+          imageUrl: isVideo ? null : mediaUrl,
+          videoUrl: isVideo ? mediaUrl : null,
+          filename: this.selectedMedia.name
+        });
+
+        if (response.data.success) {
+          this.displayEvaluationResult(response.data, 'Fichier: ' + this.selectedMedia.name);
+          this.showNotification('✅ Analyse du fichier terminée !', 'success');
+        } else {
+          this.showNotification('Erreur: ' + response.data.error, 'error');
+        }
       }
 
     } catch (error) {
@@ -1264,9 +1655,76 @@ class CollectionEvaluator {
   }
 
   async fileToDataUrl(file) {
-    return new Promise((resolve) => {
+    // Si ce n'est pas une image, retourner le fichier tel quel
+    if (!file.type.startsWith('image/')) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Compression automatique pour les images
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target.result);
+      reader.onload = async (e) => {
+        try {
+          const img = new Image();
+          img.onload = () => {
+            // Calculer les dimensions optimales (max 1920px de largeur)
+            let width = img.width;
+            let height = img.height;
+            const maxWidth = 1920;
+
+            if (width > maxWidth) {
+              height = (height * maxWidth) / width;
+              width = maxWidth;
+            }
+
+            // Créer un canvas pour la compression
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Compression progressive jusqu'à atteindre < 900 KB (marge de sécurité)
+            const targetSize = 900 * 1024; // 900 KB
+            let quality = 0.85;
+            let compressed = canvas.toDataURL('image/jpeg', quality);
+
+            // Si trop gros, réduire la qualité
+            while (compressed.length > targetSize && quality > 0.5) {
+              quality -= 0.05;
+              compressed = canvas.toDataURL('image/jpeg', quality);
+            }
+
+            // Si toujours trop gros, réduire les dimensions
+            if (compressed.length > targetSize) {
+              const scale = Math.sqrt(targetSize / compressed.length);
+              canvas.width = width * scale;
+              canvas.height = height * scale;
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              compressed = canvas.toDataURL('image/jpeg', 0.8);
+            }
+
+            console.log('Image compressée:', {
+              original: Math.round(e.target.result.length / 1024) + ' KB',
+              compressed: Math.round(compressed.length / 1024) + ' KB',
+              dimensions: canvas.width + 'x' + canvas.height,
+              quality
+            });
+
+            resolve(compressed);
+          };
+          img.onerror = reject;
+          img.src = e.target.result;
+        } catch (error) {
+          reject(error);
+        }
+      };
+      reader.onerror = reject;
       reader.readAsDataURL(file);
     });
   }
@@ -1511,7 +1969,7 @@ class CollectionEvaluator {
       }
     } catch (error) {
       console.error('Erreur analyse avancée:', error);
-      this.showNotification('❌ Erreur lors de l\'analyse avancée', 'error');
+      this.showNotification('❌ Erreur lors de l\\'analyse avancée', 'error');
     }
   }
 
@@ -1662,6 +2120,176 @@ class CollectionEvaluator {
       }
     }, 3000);
   }
+
+  // ==================== NAVIGATION MULTI-PAGE ====================
+
+  setupPhotoTabs() {
+    // Initialiser sur la page Base de Données par défaut
+    this.showPage('Database');
+  }
+
+  showPage(pageName) {
+    // Cacher toutes les pages
+    document.querySelectorAll('.page-content').forEach(page => {
+      page.classList.add('hidden');
+    });
+
+    // Afficher la page sélectionnée
+    const selectedPage = document.getElementById('page' + pageName);
+    if (selectedPage) {
+      selectedPage.classList.remove('hidden');
+    }
+
+    // Mettre à jour les boutons de navigation
+    document.querySelectorAll('nav button').forEach(btn => {
+      btn.classList.remove('bg-blue-600', 'text-white');
+      btn.classList.add('text-gray-600');
+    });
+
+    const activeBtn = document.getElementById('nav' + pageName);
+    if (activeBtn) {
+      activeBtn.classList.add('bg-blue-600', 'text-white');
+      activeBtn.classList.remove('text-gray-600');
+    }
+
+    // Recharger les données selon la page
+    if (pageName === 'Database') {
+      // Recharger stats et items pour la page Base de Données
+      this.loadStats();
+      this.loadItems();
+    } else if (pageName === 'Photos') {
+      // Recharger les photos pour la galerie
+      this.loadPhotos();
+    }
+  }
+
+  async loadPhotos() {
+    try {
+      const response = await fetch('/api/photos?limit=50');
+      const data = await response.json();
+      if (data.success) {
+        this.displayPhotos(data.photos);
+        document.getElementById('photosCount').textContent = data.photos.length;
+      }
+    } catch (error) {
+      console.error('Erreur chargement photos:', error);
+    }
+  }
+
+  displayPhotos(photos) {
+    const grid = document.getElementById('photosGrid');
+    const empty = document.getElementById('photosEmpty');
+
+    if (!photos || photos.length === 0) {
+      grid.innerHTML = '';
+      empty.classList.remove('hidden');
+      return;
+    }
+
+    empty.classList.add('hidden');
+    grid.innerHTML = photos.map(photo => \`
+      <div class="bg-white rounded-lg shadow-lg overflow-hidden cursor-pointer hover:shadow-xl transition-shadow"
+           onclick="window.app.showPhotoDetail(\${photo.id})">
+        <div class="aspect-video bg-gray-200 relative">
+          \${photo.image_url ? \`<img src="\${photo.image_url}" alt="Photo" class="w-full h-full object-cover">\` :
+            \`<div class="w-full h-full flex items-center justify-center"><i class="fas fa-image text-gray-400 text-4xl"></i></div>\`}
+          <div class="absolute top-2 right-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs">
+            \${photo.total_items_detected || 0} livres
+          </div>
+        </div>
+        <div class="p-4">
+          <div class="text-sm text-gray-600">
+            <p class="mb-1"><i class="fas fa-calendar mr-1"></i>\${new Date(photo.uploaded_at).toLocaleDateString('fr-FR')}</p>
+            \${photo.total_value ? \`<p class="text-green-600 font-semibold"><i class="fas fa-dollar-sign mr-1"></i>\${photo.total_value.toFixed(2)} CAD</p>\` : '<p class="text-gray-400">Valeur non estimée</p>'}
+          </div>
+        </div>
+      </div>
+    \`).join('');
+  }
+
+  async showPhotoDetail(photoId) {
+    try {
+      const response = await fetch(\`/api/photos/\${photoId}\`);
+      const data = await response.json();
+      if (data.success && data.photo) {
+        this.currentPhotoId = photoId;
+        this.displayPhotoDetail(data.photo, data.items);
+      }
+    } catch (error) {
+      console.error('Erreur détail photo:', error);
+    }
+  }
+
+  displayPhotoDetail(photo, items) {
+    document.getElementById('modalPhotoImg').src = photo.image_url || '';
+    document.getElementById('modalPhotoDate').textContent = new Date(photo.uploaded_at).toLocaleString('fr-FR');
+    document.getElementById('modalPhotoCount').textContent = items.length;
+    const totalValue = items.reduce((sum, item) => sum + (parseFloat(item.estimated_value) || 0), 0);
+    document.getElementById('modalPhotoValue').textContent = totalValue > 0 ? \`\${totalValue.toFixed(2)} CAD\` : 'Non estimée';
+
+    document.getElementById('modalBooksList').innerHTML = items.map((item, idx) => \`
+      <div class="p-3 bg-gray-50 rounded-lg">
+        <div class="flex items-start justify-between">
+          <div class="flex-1">
+            <p class="font-semibold text-gray-800">\${idx + 1}. \${item.title || 'Sans titre'}</p>
+            \${item.artist_author ? \`<p class="text-sm text-gray-600"><i class="fas fa-user mr-1"></i>\${item.artist_author}</p>\` : ''}
+            \${item.publisher_label ? \`<p class="text-xs text-gray-500">\${item.publisher_label}</p>\` : ''}
+            \${item.year ? \`<p class="text-xs text-gray-500">\${item.year}</p>\` : ''}
+            \${item.isbn_13 ? \`<p class="text-xs text-gray-400 font-mono">\${item.isbn_13}</p>\` : ''}
+          </div>
+          <div class="text-right ml-4">
+            \${item.estimated_value ? \`<p class="text-green-600 font-semibold">\${parseFloat(item.estimated_value).toFixed(2)} CAD</p>\` : '<p class="text-gray-400 text-sm">N/A</p>'}
+            \${item.detection_confidence ? \`<p class="text-xs text-gray-500">\${(item.detection_confidence * 100).toFixed(0)}% confiance</p>\` : ''}
+          </div>
+        </div>
+      </div>
+    \`).join('');
+
+    document.getElementById('photoModal').classList.remove('hidden');
+  }
+
+  closePhotoModal() {
+    document.getElementById('photoModal').classList.add('hidden');
+    this.currentPhotoId = null;
+  }
+
+  async deleteCurrentPhoto() {
+    if (!this.currentPhotoId || !confirm('Supprimer cette photo et tous les livres associés ?')) return;
+    try {
+      const response = await fetch(\`/api/photos/\${this.currentPhotoId}\`, { method: 'DELETE' });
+      if ((await response.json()).success) {
+        this.showNotification('✅ Photo supprimée', 'success');
+        this.closePhotoModal();
+        this.loadPhotos();
+        this.loadItems();
+      }
+    } catch (error) {
+      console.error('Erreur suppression:', error);
+    }
+  }
+
+  async exportPhotoBooks() {
+    if (!this.currentPhotoId) return;
+    try {
+      const response = await fetch(\`/api/photos/\${this.currentPhotoId}\`);
+      const data = await response.json();
+      if (data.success) {
+        const headers = ['Titre', 'Auteur', 'Éditeur', 'Année', 'ISBN-13', 'Valeur', 'Confiance'];
+        const rows = data.items.map(item => [item.title || '', item.artist_author || '', item.publisher_label || '',
+          item.year || '', item.isbn_13 || '', item.estimated_value || '',
+          item.detection_confidence ? (item.detection_confidence * 100).toFixed(0) + '%' : '']);
+        const csv = [headers, ...rows].map(row => row.map(cell => \`"\${String(cell).replace(/"/g, '""')}"\`).join(',')).join('\\n');
+        const blob = new Blob(['\\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = \`photo_\${this.currentPhotoId}_livres.csv\`;
+        link.click();
+        this.showNotification('✅ CSV exporté', 'success');
+      }
+    } catch (error) {
+      console.error('Erreur export:', error);
+    }
+  }
 }
 
 // Initialisation
@@ -1730,21 +2358,41 @@ app.get('/api/stats', async (c) => {
 
 // API: Lister les items
 app.get('/api/items', async (c) => {
+  const { DB } = c.env;
+
   try {
+    // Paramètres de pagination
+    const page = parseInt(c.req.query('page') || '1');
+    const per_page = parseInt(c.req.query('per_page') || '20');
+    const offset = (page - 1) * per_page;
+
+    // Compter le total
+    const countResult = await DB.prepare('SELECT COUNT(*) as total FROM collection_items').first();
+    const total = countResult.total || 0;
+
+    // Récupérer les items
+    const items = await DB.prepare(`
+      SELECT id, title, description, category, primary_image_url, processing_status, created_at
+      FROM collection_items
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(per_page, offset).all();
+
     return c.json({
       success: true,
-      items: [],
+      items: items.results || [],
       pagination: {
-        page: 1,
-        per_page: 20,
-        total: 0,
-        pages: 0
+        page,
+        per_page,
+        total,
+        pages: Math.ceil(total / per_page)
       }
     });
-  } catch (error) {
-    return c.json({ 
-      success: false, 
-      error: error.message 
+  } catch (error: any) {
+    console.error('❌ Erreur listing items:', error);
+    return c.json({
+      success: false,
+      error: error.message
     }, 500);
   }
 })
@@ -1752,18 +2400,39 @@ app.get('/api/items', async (c) => {
 // API: Import d'un item depuis CSV
 app.post('/api/import-item', async (c) => {
   const { DB } = c.env;
-  
+
   try {
     const body = await c.req.json();
-    
-    // Mode démo - toujours succès
+    const { title, author, category, image_url, isbn } = body;
+
+    // Validation
+    if (!title || !category) {
+      return c.json({
+        success: false,
+        error: 'title et category sont requis'
+      }, 400);
+    }
+
+    // Insérer dans la base de données (utilise collection_id = 1 par défaut)
+    const result = await DB.prepare(`
+      INSERT INTO collection_items (collection_id, title, description, category, primary_image_url, processing_status, created_at, updated_at)
+      VALUES (1, ?, ?, ?, ?, 'completed', datetime('now'), datetime('now'))
+    `).bind(
+      title,
+      author ? `Auteur: ${author}${isbn ? ', ISBN: ' + isbn : ''}` : '',
+      category,
+      image_url || ''
+    ).run();
+
+    console.log('✅ Item importé:', title, '- ID:', result.meta.last_row_id);
+
     return c.json({
       success: true,
-      item_id: Date.now(),
-      message: 'Item importé avec succès (mode démo)'
+      item_id: result.meta.last_row_id,
+      message: 'Item importé avec succès'
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Erreur import item:', error);
     return c.json({
       success: false,
@@ -1888,5 +2557,439 @@ app.post('/api/advanced-analysis', async (c) => {
     }, 500);
   }
 })
+
+// ============================================================================
+// 🚀 V2.1 - NOUVEAUX ENDPOINTS (SANS AUTHENTICATION)
+// ============================================================================
+
+// 📚 Documentation Swagger UI
+app.get('/docs', (c) => {
+  const baseUrl = c.env.BASE_URL || 'http://localhost:3000';
+  const html = `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Documentation - ImageToValue v2.1</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+  <style>
+    body { margin: 0; padding: 0; }
+    .topbar { display: none; }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.onload = function() {
+      SwaggerUIBundle({
+        url: '${baseUrl}/openapi.json',
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        layout: "StandaloneLayout",
+        persistAuthorization: false,
+        tryItOutEnabled: true
+      });
+    };
+  </script>
+</body>
+</html>
+  `.trim();
+
+  c.header('Content-Type', 'text/html; charset=utf-8');
+  return c.html(html);
+});
+
+// 📄 OpenAPI Specification
+app.get('/openapi.json', (c) => {
+  const baseUrl = c.env.BASE_URL || 'http://localhost:3000';
+
+  return c.json({
+    openapi: '3.1.0',
+    info: {
+      title: 'ImageToValue Evaluator API',
+      version: '2.1.0',
+      description: 'Système d\'évaluation multi-expert IA pour collections',
+      contact: {
+        name: 'Mathieu Chamberland',
+        email: 'Math55_50@hotmail.com'
+      }
+    },
+    servers: [
+      { url: baseUrl, description: 'Serveur actuel' }
+    ],
+    paths: {
+      '/healthz': {
+        get: {
+          summary: 'Health Check',
+          tags: ['System'],
+          responses: {
+            200: { description: 'Service opérationnel' }
+          }
+        }
+      },
+      '/metrics': {
+        get: {
+          summary: 'Métriques Prometheus',
+          tags: ['System'],
+          responses: {
+            200: { description: 'Métriques système' }
+          }
+        }
+      },
+      '/api/cache/stats': {
+        get: {
+          summary: 'Statistiques Cache',
+          tags: ['Cache'],
+          responses: {
+            200: {
+              description: 'Stats du cache API',
+              content: {
+                'application/json': {
+                  example: {
+                    success: true,
+                    cache_stats: {
+                      total_entries: 1250,
+                      total_hits: 8340,
+                      hit_rate: 85.2,
+                      cache_size_mb: 12.5
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    tags: [
+      { name: 'System', description: 'Endpoints système' },
+      { name: 'Cache', description: 'Gestion du cache' }
+    ]
+  });
+});
+
+// 📊 Métriques Prometheus
+app.get('/metrics', (c) => {
+  try {
+    // Générer métriques basiques si le service n'est pas disponible
+    const metricsText = `# HELP http_requests_total Total HTTP requests
+# TYPE http_requests_total counter
+http_requests_total 0
+
+# HELP cache_hit_rate Cache hit rate percentage
+# TYPE cache_hit_rate gauge
+cache_hit_rate 0
+`;
+    c.header('Content-Type', 'text/plain; version=0.0.4');
+    return c.text(metricsText);
+  } catch (error) {
+    return c.text('# No metrics available yet\n');
+  }
+});
+
+// 📈 Métriques JSON
+app.get('/metrics/json', (c) => {
+  return c.json({
+    success: true,
+    metrics: {
+      counters: [],
+      histograms: []
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ❤️ Health Check
+app.get('/healthz', (c) => {
+  return c.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    version: '2.1.0'
+  });
+});
+
+// ✅ Readiness Check
+app.get('/readyz', async (c) => {
+  const checks: Record<string, boolean> = {};
+
+  // Vérifier DB
+  try {
+    await c.env.DB.prepare('SELECT 1').first();
+    checks.database = true;
+  } catch {
+    checks.database = false;
+  }
+
+  // Vérifier API keys
+  checks.openai = !!c.env.OPENAI_API_KEY;
+  checks.anthropic = !!c.env.ANTHROPIC_API_KEY;
+
+  const ready = Object.values(checks).every(check => check);
+
+  return c.json({
+    status: ready ? 'ready' : 'not_ready',
+    checks,
+    timestamp: new Date().toISOString()
+  }, ready ? 200 : 503);
+});
+
+// ℹ️ System Info
+app.get('/info', (c) => {
+  return c.json({
+    success: true,
+    system: {
+      version: '2.1.0',
+      environment: c.env.ENVIRONMENT || 'production',
+      features: {
+        multi_expert_analysis: true,
+        api_caching: true,
+        batch_processing: true,
+        video_analysis: !!c.env.OPENAI_API_KEY,
+        metrics: true,
+        documentation: true
+      },
+      experts: {
+        openai_vision: !!c.env.OPENAI_API_KEY,
+        claude_collection: !!c.env.ANTHROPIC_API_KEY,
+        gemini_comparative: !!c.env.GEMINI_API_KEY
+      }
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
+// 💾 Cache Stats
+app.get('/api/cache/stats', async (c) => {
+  try {
+    const result = await c.env.DB.prepare(`
+      SELECT
+        COUNT(*) as total_entries,
+        SUM(hit_count) as total_hits,
+        COUNT(CASE WHEN expires_at < datetime('now') THEN 1 END) as expired_entries,
+        SUM(LENGTH(response_data)) / 1024.0 / 1024.0 as cache_size_mb
+      FROM api_cache
+    `).first();
+
+    const hitRate = result.total_entries > 0
+      ? (result.total_hits / result.total_entries) * 100
+      : 0;
+
+    const stats = {
+      total_entries: result.total_entries || 0,
+      total_hits: result.total_hits || 0,
+      expired_entries: result.expired_entries || 0,
+      cache_size_mb: Math.round((result.cache_size_mb || 0) * 100) / 100,
+      hit_rate: Math.round(hitRate * 100) / 100
+    };
+
+    return c.json({
+      success: true,
+      cache_stats: stats,
+      recommendations: {
+        hit_rate_target: 80,
+        current_performance: stats.hit_rate >= 80
+          ? '✅ Excellent'
+          : stats.hit_rate >= 60
+            ? '⚠️ Bon'
+            : '❌ À améliorer',
+        estimated_savings: `${Math.round(stats.hit_rate)}% de réduction coûts API`
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    return c.json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Impossible de récupérer les statistiques du cache',
+        details: error.message
+      },
+      timestamp: new Date().toISOString()
+    }, 500);
+  }
+});
+
+// 🧹 Cache Cleanup
+app.post('/api/cache/cleanup', async (c) => {
+  try {
+    const result = await c.env.DB.prepare(`
+      DELETE FROM api_cache
+      WHERE expires_at < datetime('now')
+    `).run();
+
+    const deleted = result.meta?.changes || 0;
+
+    return c.json({
+      success: true,
+      deleted_entries: deleted,
+      message: `${deleted} entrées expirées supprimées`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    return c.json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Échec du nettoyage du cache',
+        details: error.message
+      },
+      timestamp: new Date().toISOString()
+    }, 500);
+  }
+});
+
+// 📝 Curl Examples
+app.get('/examples', (c) => {
+  const baseUrl = c.env.BASE_URL || 'http://localhost:3000';
+
+  const examples = `
+# ImageToValue API - Exemples Curl
+
+## Health Check
+curl ${baseUrl}/healthz
+
+## Vérifier que tout est prêt
+curl ${baseUrl}/readyz
+
+## Voir les métriques
+curl ${baseUrl}/metrics
+
+## Stats du cache (JSON)
+curl ${baseUrl}/api/cache/stats | jq
+
+## Nettoyage du cache
+curl -X POST ${baseUrl}/api/cache/cleanup
+
+## Info système
+curl ${baseUrl}/info
+
+## Documentation interactive
+open ${baseUrl}/docs
+  `.trim();
+
+  c.header('Content-Type', 'text/plain; charset=utf-8');
+  return c.text(examples);
+});
+
+// 🧪 Page de test simple de l'API
+app.get('/test-api', (c) => {
+  const html = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test API - ImageToValue</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; background: #f5f5f5; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #2563eb; margin-bottom: 20px; }
+        button { background: #2563eb; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; margin: 5px; }
+        button:hover { background: #1d4ed8; }
+        #result { margin-top: 20px; padding: 15px; background: #f0f9ff; border-left: 4px solid #2563eb; border-radius: 4px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+        .success { color: #059669; font-weight: bold; }
+        .error { color: #dc2626; font-weight: bold; }
+        .info { color: #6b7280; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test API Backend</h1>
+        <p class="info">Cette page teste directement l'API backend pour vérifier qu'elle fonctionne.</p>
+        <div style="margin: 20px 0;">
+            <button onclick="testHealth()">✅ Test Health</button>
+            <button onclick="testGetItems()">📚 Lister les Livres</button>
+            <button onclick="testImport()">➕ Importer un Livre</button>
+            <button onclick="testCacheStats()">💾 Stats Cache</button>
+        </div>
+        <div id="result"></div>
+    </div>
+    <script>
+        const resultDiv = document.getElementById('result');
+        function showResult(title, data, isSuccess = true) {
+            const className = isSuccess ? 'success' : 'error';
+            resultDiv.innerHTML = \`<div class="\${className}">\${title}</div><div style="margin-top: 10px;">\${JSON.stringify(data, null, 2)}</div>\`;
+        }
+        function showError(title, error) {
+            resultDiv.innerHTML = \`<div class="error">\${title}</div><div style="margin-top: 10px; color: #dc2626;">Erreur: \${error.message}</div>\`;
+        }
+        async function testHealth() {
+            try {
+                const response = await fetch('/healthz');
+                const data = await response.json();
+                showResult('✅ Health Check - SUCCÈS', data);
+            } catch (error) {
+                showError('❌ Health Check - ÉCHEC', error);
+            }
+        }
+        async function testGetItems() {
+            try {
+                const response = await fetch('/api/items');
+                const data = await response.json();
+                if (data.success && data.items.length > 0) {
+                    showResult(\`✅ \${data.items.length} livres trouvés !\`, data);
+                } else if (data.success && data.items.length === 0) {
+                    showResult('⚠️ API fonctionne mais aucun livre', data);
+                } else {
+                    showError('❌ Erreur lors de la récupération', new Error(data.error));
+                }
+            } catch (error) {
+                showError("❌ Impossible de contacter l'API", error);
+            }
+        }
+        async function testImport() {
+            try {
+                const response = await fetch('/api/import-item', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: 'Test - ' + new Date().toLocaleTimeString(), author: 'Test Author', category: 'books' })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showResult('✅ Import réussi !', data);
+                    setTimeout(testGetItems, 500);
+                } else {
+                    showError('❌ Import échoué', new Error(data.error));
+                }
+            } catch (error) {
+                showError("❌ Erreur lors de l'import", error);
+            }
+        }
+        async function testCacheStats() {
+            try {
+                const response = await fetch('/api/cache/stats');
+                const data = await response.json();
+                showResult('✅ Stats du cache', data);
+            } catch (error) {
+                showError('❌ Erreur cache stats', error);
+            }
+        }
+        window.onload = function() {
+            resultDiv.innerHTML = "<div class='info'>Cliquez sur un bouton pour tester l'API...</div>";
+            setTimeout(testGetItems, 500);
+        };
+    </script>
+</body>
+</html>`;
+
+  c.header('Content-Type', 'text/html; charset=utf-8');
+  return c.html(html);
+});
+
+// ============================================================================
+// PHOTO ANALYSIS ROUTES (v2.2)
+// ============================================================================
+
+app.route('/api/photos', photosRouter);
+
+// ============================================================================
+// FIN DU CODE V2.1
+// ============================================================================
 
 export default app

@@ -1,6 +1,6 @@
-Titre,Description,Catégorie,État,Année,Fabricant,Valeur estimée
-"Abbey Road - The Beatles","Album original de 1969, très bon état","livres","excellent","1969","Apple Records","750"
-"Wayne Gretzky rookie card","Carte rookie de 1979-80 O-Pee-Chee","cartes","near mint","1979","O-Pee-Chee","2500"
-"Les Anciens Canadiens","Philippe Aubert de Gaspé, première édition","livres","bon","1863","Desbarats","1200"
-"Tintin au Tibet","Hergé, première édition française","bd","excellent","1960","Casterman","400"
-"Pink Floyd - The Wall","Vinyle double album, pochette originale","vintage","très bon","1979","Columbia","150"
+title,author,category,image_url
+"1984","George Orwell","books",""
+"Le Petit Prince","Antoine de Saint-Exupéry","books",""
+"Harry Potter à l'école des sorciers","J.K. Rowling","books",""
+"Le Seigneur des Anneaux","J.R.R. Tolkien","books",""
+"Fondation","Isaac Asimov","books",""
