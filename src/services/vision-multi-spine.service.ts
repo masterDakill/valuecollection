@@ -70,6 +70,7 @@ export class VisionMultiSpineService {
               ]
             }
           ],
+          response_format: { type: 'json_object' },
           max_tokens: 4000,
           temperature: 0.1 // Basse température pour précision
         })
@@ -86,6 +87,9 @@ export class VisionMultiSpineService {
       if (!content) {
         throw new Error('No content in OpenAI response');
       }
+
+      // LOG: Afficher la réponse complète de GPT-4o
+      console.log('[VisionMultiSpine] GPT-4o Response:', content);
 
       // Parser la réponse JSON
       const parsedResults = this.parseVisionResponse(content, options.maxItems);
@@ -104,36 +108,56 @@ export class VisionMultiSpineService {
    * Construit le prompt pour détecter plusieurs dos de livres
    */
   private buildMultiSpinePrompt(options: { maxItems: number }): string {
-    return `Analyze this image containing multiple book spines on a shelf.
+    return `Analyze this image containing one or more books in ANY orientation or presentation.
 
-TASK: Identify and extract information from each individual book spine visible in the image.
+TASK: Identify and extract information from EACH visible book, regardless of how it's presented.
+
+ACCEPTED FORMATS:
+- Book spines/DOS (vertical on shelf, side view showing title on edge)
+- Front covers (face-up or standing, showing full cover design)
+- Back covers (showing ISBN, publisher info)
+- Stacked books (multiple books piled)
+- 3D scans or Polycam captures (any angle or perspective)
+- Mixed orientations (some spines, some covers in same photo)
 
 INSTRUCTIONS:
-1. Detect up to ${options.maxItems} book spines
-2. For each spine, extract:
-   - Title (exact text from spine)
-   - Author name (if visible)
+1. Detect up to ${options.maxItems} books in ANY presentation
+2. For EACH book visible, extract ALL readable information:
+   - Title (from spine, cover, or any visible text)
+   - Author/Artist name (if visible anywhere)
    - Publisher/Label (if visible)
-   - Year (if visible)
+   - Year/Date (if visible)
+   - ISBN (if visible on back cover or inside)
+   - Edition info (if visible)
+   - Series name (if part of a series)
    - Approximate position in image (normalized 0-1: x, y, width, height)
-3. Skip spines that are too blurry or partially hidden
+3. Include books even if partially visible or at odd angles
 4. Confidence level for each detection (0-1)
+5. For covers: read ALL visible text including subtitles, taglines, author names
 
-OUTPUT FORMAT (JSON array):
-[
-  {
-    "rawText": "Full text visible on spine",
-    "bbox": [x, y, width, height],
-    "confidence": 0.95
-  },
-  ...
-]
+OUTPUT FORMAT (JSON object with books array):
+{
+  "books": [
+    {
+      "rawText": "All readable text from book (title, author, publisher, etc)",
+      "bbox": [x, y, width, height],
+      "confidence": 0.95
+    }
+  ]
+}
+
+EXAMPLES of rawText format:
+- Spine: "Harry Potter and the Philosopher's Stone - J.K. Rowling - Bloomsbury"
+- Cover: "H.P. LOVECRAFT LE ROMAN DE SA VIE par L. Sprague de Camp"
+- Mixed: "The Great Gatsby by F. Scott Fitzgerald, Penguin Classics, 2000"
 
 IMPORTANT:
-- Return ONLY valid JSON, no additional text
+- Return ONLY valid JSON array, no additional commentary
 - Normalize bbox coordinates to 0-1 range
-- Order books from left to right (or top to bottom)
-- Include only spines with confidence >= 0.5
+- Order books naturally (left-to-right, top-to-bottom)
+- Include books with confidence >= 0.4 (lower threshold for flexibility)
+- Extract MAXIMUM information from each book
+- Work with ANY photo angle, lighting, or book orientation
 
 Begin analysis now:`;
   }
@@ -143,22 +167,20 @@ Begin analysis now:`;
    */
   private parseVisionResponse(content: string, maxItems: number): VisionSpineResult[] {
     try {
-      // Extraire le JSON du contenu (au cas où il y aurait du texte autour)
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
-        console.warn('[VisionMultiSpine] No JSON array found in response, returning empty array');
+      // Parse le JSON (avec response_format json_object, c'est déjà du JSON valide)
+      const parsed = JSON.parse(content);
+
+      // Extraire l'array books
+      const books = parsed.books || parsed.items || [];
+
+      if (!Array.isArray(books)) {
+        console.warn('[VisionMultiSpine] No books array found in response:', parsed);
         return [];
       }
 
-      const parsed = JSON.parse(jsonMatch[0]);
-
-      if (!Array.isArray(parsed)) {
-        throw new Error('Response is not an array');
-      }
-
       // Valider et limiter les résultats
-      return parsed
-        .filter(item => item.rawText && item.bbox && item.confidence >= 0.5)
+      return books
+        .filter(item => item.rawText && item.bbox && item.confidence >= 0.4)
         .slice(0, maxItems)
         .map(item => ({
           rawText: item.rawText,
@@ -167,13 +189,9 @@ Begin analysis now:`;
         }));
 
     } catch (error) {
-      console.error('[VisionMultiSpine] Failed to parse response:', error);
-      // Fallback: essayer de créer un seul résultat avec tout le texte
-      return [{
-        rawText: content,
-        bbox: [0, 0, 1, 1],
-        confidence: 0.5
-      }];
+      console.error('[VisionMultiSpine] Failed to parse response:', error, 'Content:', content);
+      // Fallback: retourner array vide
+      return [];
     }
   }
 
