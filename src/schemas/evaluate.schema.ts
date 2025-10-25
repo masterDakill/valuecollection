@@ -59,44 +59,64 @@ export const EvaluationOptionsSchema = z.object({
 // POST /api/smart-evaluate
 // =============================================================================
 
-export const SmartEvaluateRequestSchema = z.object({
-  // Mode
-  mode: InputModeSchema.describe('Type d\'input principal'),
+const SmartEvaluateRequestBase = z
+  .object({
+    // Mode
+    mode: InputModeSchema.describe('Type d\'input principal'),
 
-  // Inputs texte
-  text_input: z.string().min(1).max(500).optional()
-    .describe('Description texte libre (ex: "Abbey Road The Beatles")'),
+    // Inputs texte
+    text_input: z
+      .string()
+      .min(1)
+      .max(500)
+      .optional()
+      .describe('Description texte libre (ex: "Abbey Road The Beatles")'),
 
-  query: z.string().min(1).max(500).optional()
-    .describe('Alias de text_input pour compatibilité'),
+    query: z
+      .string()
+      .min(1)
+      .max(500)
+      .optional()
+      .describe('Alias de text_input pour compatibilité'),
 
-  // Inputs image
-  imageUrl: z.string().url().optional()
-    .describe('URL image unique (DEPRECATED, use imageUrls)'),
+    // Inputs image
+    imageUrl: z.string().url().optional().describe('URL image unique (DEPRECATED, use imageUrls)'),
 
-  imageUrls: z.array(z.string().url()).max(10).optional()
-    .describe('URLs images (max 10, chacune <10MB)'),
+    imageUrls: z
+      .array(z.string().url())
+      .max(10)
+      .optional()
+      .describe('URLs images (max 10, chacune <10MB)'),
 
-  // Inputs vidéo
-  videoUrl: z.string().url().optional()
-    .describe('URL vidéo (YouTube ou upload direct)'),
+    // Inputs vidéo
+    videoUrl: z.string().url().optional().describe('URL vidéo (YouTube ou upload direct)'),
 
-  // Metadata
-  filename: z.string().max(255).optional()
-    .describe('Nom fichier original (extraction metadata)'),
+    // Metadata
+    filename: z
+      .string()
+      .max(255)
+      .optional()
+      .describe('Nom fichier original (extraction metadata)'),
 
-  category: CategorySchema.optional()
-    .describe('Catégorie si connue (améliore précision)'),
+    category: CategorySchema.optional().describe('Catégorie si connue (améliore précision)'),
 
-  // Options
-  options: EvaluationOptionsSchema.optional()
-    .describe('Options avancées évaluation')
-}).strict()
-  .refine(
-    (data) => data.text_input || data.query || data.imageUrl || data.imageUrls || data.videoUrl,
-    { message: 'Au moins un input requis: text_input, imageUrls, ou videoUrl' }
-  );
+    // Options
+    options: EvaluationOptionsSchema.optional().describe('Options avancées évaluation')
+  })
+  .strict();
 
+const requireAtLeastOneInput = (data: z.infer<typeof SmartEvaluateRequestBase>, ctx: z.RefinementCtx) => {
+  if (data.text_input || data.query || data.imageUrl || (data.imageUrls && data.imageUrls.length) || data.videoUrl) {
+    return;
+  }
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: "Au moins un input requis: text_input, imageUrls, ou videoUrl"
+  });
+};
+
+export const SmartEvaluateRequestSchema = SmartEvaluateRequestBase.superRefine(requireAtLeastOneInput);
 export type SmartEvaluateRequest = z.infer<typeof SmartEvaluateRequestSchema>;
 
 // =============================================================================
@@ -156,7 +176,7 @@ export type SmartEvaluateResponse = z.infer<typeof SmartEvaluateResponseSchema>;
 // POST /api/advanced-analysis
 // =============================================================================
 
-export const AdvancedAnalysisRequestSchema = SmartEvaluateRequestSchema.extend({
+export const AdvancedAnalysisRequestSchema = SmartEvaluateRequestBase.extend({
   compute_mode: z.enum(['sync', 'async']).default('sync')
     .describe('sync=réponse immédiate, async=job queued avec jobId'),
 
@@ -165,7 +185,7 @@ export const AdvancedAnalysisRequestSchema = SmartEvaluateRequestSchema.extend({
 
   webhook_url: z.string().url().optional()
     .describe('URL callback pour résultats async')
-}).strict();
+}).strict().superRefine(requireAtLeastOneInput);
 
 export type AdvancedAnalysisRequest = z.infer<typeof AdvancedAnalysisRequestSchema>;
 
