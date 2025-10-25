@@ -4,6 +4,7 @@ import { MultiExpertAISystem } from './ai-experts'
 import { photoBooksRouter } from './routes/photo-books';
 import { photosRouter } from './routes/photos';
 import { itemsRouter } from './routes/items';
+import booksHtml from '../public/books.html?raw';
 // Types pour les bindings Cloudflare
 type Bindings = {
   DB: D1Database;
@@ -2989,6 +2990,15 @@ app.get('/test-api', (c) => {
 
 app.route('/api/photos', photosRouter);
 app.route('/api/items', itemsRouter);
+
+// ============================================================================
+// BOOKS PAGE
+// ============================================================================
+
+app.get('/books', (c) => {
+  c.header('Content-Type', 'text/html; charset=utf-8');
+  return c.html(booksHtml);
+});
 
 // ============================================================================
 // FIN DU CODE V2.1
