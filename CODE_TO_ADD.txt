@@ -1,0 +1,360 @@
+================================================================================
+📋 CODE À COPIER-COLLER DANS src/index.tsx
+================================================================================
+
+INSTRUCTIONS:
+1. Ouvrez: src/index.tsx
+2. Allez tout en bas du fichier (avant "export default app")
+3. Copiez-collez tout le code ci-dessous
+4. Sauvegardez
+
+================================================================================
+
+// ============================================================================
+// 🚀 V2.1 - NOUVEAUX ENDPOINTS (SANS AUTHENTICATION)
+// ============================================================================
+
+import { Metrics, metrics } from './lib/metrics';
+import { APICacheService } from './services/api-cache-service';
+import { createLogger } from './lib/logger';
+
+// 📚 Documentation Swagger UI
+app.get('/docs', (c) => {
+  const baseUrl = c.env.BASE_URL || 'http://localhost:3000';
+  const html = `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Documentation - ImageToValue v2.1</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+  <style>
+    body { margin: 0; padding: 0; }
+    .topbar { display: none; }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.onload = function() {
+      SwaggerUIBundle({
+        url: '${baseUrl}/openapi.json',
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        layout: "StandaloneLayout",
+        persistAuthorization: false,
+        tryItOutEnabled: true
+      });
+    };
+  </script>
+</body>
+</html>
+  `.trim();
+
+  c.header('Content-Type', 'text/html; charset=utf-8');
+  return c.html(html);
+});
+
+// 📄 OpenAPI Specification
+app.get('/openapi.json', (c) => {
+  const baseUrl = c.env.BASE_URL || 'http://localhost:3000';
+
+  return c.json({
+    openapi: '3.1.0',
+    info: {
+      title: 'ImageToValue Evaluator API',
+      version: '2.1.0',
+      description: 'Système d\'évaluation multi-expert IA pour collections',
+      contact: {
+        name: 'Mathieu Chamberland',
+        email: 'Math55_50@hotmail.com'
+      }
+    },
+    servers: [
+      { url: baseUrl, description: 'Serveur actuel' }
+    ],
+    paths: {
+      '/healthz': {
+        get: {
+          summary: 'Health Check',
+          tags: ['System'],
+          responses: {
+            200: { description: 'Service opérationnel' }
+          }
+        }
+      },
+      '/metrics': {
+        get: {
+          summary: 'Métriques Prometheus',
+          tags: ['System'],
+          responses: {
+            200: { description: 'Métriques système' }
+          }
+        }
+      },
+      '/api/cache/stats': {
+        get: {
+          summary: 'Statistiques Cache',
+          tags: ['Cache'],
+          responses: {
+            200: {
+              description: 'Stats du cache API',
+              content: {
+                'application/json': {
+                  example: {
+                    success: true,
+                    cache_stats: {
+                      total_entries: 1250,
+                      total_hits: 8340,
+                      hit_rate: 85.2,
+                      cache_size_mb: 12.5
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    tags: [
+      { name: 'System', description: 'Endpoints système' },
+      { name: 'Cache', description: 'Gestion du cache' }
+    ]
+  });
+});
+
+// 📊 Métriques Prometheus
+app.get('/metrics', (c) => {
+  try {
+    const prometheusText = metrics.exportPrometheus();
+    c.header('Content-Type', 'text/plain; version=0.0.4');
+    return c.text(prometheusText);
+  } catch (error) {
+    return c.text('# No metrics available yet\n');
+  }
+});
+
+// 📈 Métriques JSON
+app.get('/metrics/json', (c) => {
+  try {
+    const metricsData = metrics.exportJSON();
+    return c.json({
+      success: true,
+      metrics: metricsData,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    return c.json({
+      success: false,
+      error: error.message
+    }, 500);
+  }
+});
+
+// ❤️ Health Check
+app.get('/healthz', (c) => {
+  return c.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    version: '2.1.0',
+    uptime: process.uptime ? process.uptime() : 'N/A'
+  });
+});
+
+// ✅ Readiness Check
+app.get('/readyz', async (c) => {
+  const checks: Record<string, boolean> = {};
+
+  // Vérifier DB
+  try {
+    await c.env.DB.prepare('SELECT 1').first();
+    checks.database = true;
+  } catch {
+    checks.database = false;
+  }
+
+  // Vérifier API keys
+  checks.openai = !!c.env.OPENAI_API_KEY;
+  checks.anthropic = !!c.env.ANTHROPIC_API_KEY;
+
+  const ready = Object.values(checks).every(check => check);
+
+  return c.json({
+    status: ready ? 'ready' : 'not_ready',
+    checks,
+    timestamp: new Date().toISOString()
+  }, ready ? 200 : 503);
+});
+
+// ℹ️ System Info
+app.get('/info', (c) => {
+  return c.json({
+    success: true,
+    system: {
+      version: '2.1.0',
+      environment: c.env.ENVIRONMENT || 'production',
+      features: {
+        multi_expert_analysis: true,
+        api_caching: true,
+        batch_processing: true,
+        video_analysis: !!c.env.OPENAI_API_KEY,
+        metrics: true,
+        documentation: true
+      },
+      experts: {
+        openai_vision: !!c.env.OPENAI_API_KEY,
+        claude_collection: !!c.env.ANTHROPIC_API_KEY,
+        gemini_comparative: !!c.env.GEMINI_API_KEY
+      }
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
+// 💾 Cache Stats
+app.get('/api/cache/stats', async (c) => {
+  const logger = createLogger(crypto.randomUUID());
+
+  try {
+    const cache = new APICacheService(c.env.DB);
+    const stats = await cache.getStats();
+
+    return c.json({
+      success: true,
+      cache_stats: stats,
+      recommendations: {
+        hit_rate_target: 80,
+        current_performance: stats.hit_rate >= 80
+          ? '✅ Excellent'
+          : stats.hit_rate >= 60
+            ? '⚠️ Bon'
+            : '❌ À améliorer',
+        estimated_savings: `${Math.round(stats.hit_rate)}% de réduction coûts API`
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    logger.error('Failed to get cache stats', error);
+
+    return c.json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Impossible de récupérer les statistiques du cache',
+        details: error.message
+      },
+      timestamp: new Date().toISOString()
+    }, 500);
+  }
+});
+
+// 🧹 Cache Cleanup
+app.post('/api/cache/cleanup', async (c) => {
+  const logger = createLogger(crypto.randomUUID());
+
+  try {
+    const cache = new APICacheService(c.env.DB);
+    const deleted = await cache.cleanExpired();
+
+    logger.info('Cache cleanup completed', { deleted });
+
+    return c.json({
+      success: true,
+      deleted_entries: deleted,
+      message: `${deleted} entrées expirées supprimées`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    logger.error('Cache cleanup failed', error);
+
+    return c.json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Échec du nettoyage du cache',
+        details: error.message
+      },
+      timestamp: new Date().toISOString()
+    }, 500);
+  }
+});
+
+// 📝 Curl Examples
+app.get('/examples', (c) => {
+  const baseUrl = c.env.BASE_URL || 'http://localhost:3000';
+
+  const examples = `
+# ImageToValue API - Exemples Curl
+
+## Health Check
+curl ${baseUrl}/healthz
+
+## Vérifier que tout est prêt
+curl ${baseUrl}/readyz
+
+## Voir les métriques
+curl ${baseUrl}/metrics
+
+## Stats du cache (JSON)
+curl ${baseUrl}/api/cache/stats | jq
+
+## Nettoyage du cache
+curl -X POST ${baseUrl}/api/cache/cleanup
+
+## Info système
+curl ${baseUrl}/info
+
+## Documentation interactive
+open ${baseUrl}/docs
+  `.trim();
+
+  c.header('Content-Type', 'text/plain; charset=utf-8');
+  return c.text(examples);
+});
+
+// ============================================================================
+// FIN DU CODE V2.1
+// ============================================================================
+
+================================================================================
+✅ C'EST TOUT ! Vous avez maintenant :
+================================================================================
+
+📚 /docs                  → Documentation Swagger interactive
+📊 /metrics               → Métriques Prometheus
+📈 /metrics/json          → Métriques en JSON
+❤️ /healthz              → Health check
+✅ /readyz               → Readiness check
+ℹ️ /info                 → Info système
+💾 /api/cache/stats      → Statistiques du cache
+🧹 /api/cache/cleanup    → Nettoyage cache
+📝 /examples             → Exemples curl
+
+================================================================================
+🚀 COMMANDES SUIVANTES:
+================================================================================
+
+# 1. Tester localement
+npm run dev:d1
+
+# 2. Vérifier les endpoints
+open http://localhost:3000/docs
+curl http://localhost:3000/healthz
+curl http://localhost:3000/api/cache/stats
+
+# 3. Si tout fonctionne, déployer
+npm run build
+npm run deploy:prod
+
+# 4. Profiter ! 🎉
+open https://votre-app.pages.dev/docs
+
+================================================================================

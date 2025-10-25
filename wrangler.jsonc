@@ -5,12 +5,12 @@
   "compatibility_flags": ["nodejs_compat"],
   "pages_build_output_dir": "./dist",
 
-  // Base de données D1 pour les collections - CONFIGURÉE
+  // Base de données D1 pour les collections - CONFIGURÉE (Cloudflare)
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "collections-database",
-      "database_id": "bbfe7c8b-cdae-41f6-b1b1-273e884466ef"
+      "database_name": "valeurcollection",
+      "database_id": "379e424f-e721-40d8-917f-6e9e3593db5e"
     }
   ],
 

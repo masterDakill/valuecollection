@@ -1,0 +1,436 @@
+<!--
+    🎨 Widgets v2.1 - À intégrer dans votre interface principale
+    Copiez ces sections dans votre page principale (index.html ou dans src/index.tsx)
+-->
+
+<!-- ============================================================================ -->
+<!-- 1. BANNIÈRE VERSION 2.1 (À placer en haut de la page) -->
+<!-- ============================================================================ -->
+
+<div class="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white px-4 py-3 shadow-lg">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <span class="bg-white text-purple-600 px-2 py-1 rounded font-bold text-xs">v2.1</span>
+            <div class="flex items-center space-x-2 text-sm">
+                <i class="fas fa-rocket"></i>
+                <span><strong>Nouveau:</strong> Cache intelligent • Métriques • Documentation API</span>
+            </div>
+        </div>
+        <div class="flex items-center space-x-3 text-xs">
+            <a href="/docs" target="_blank" class="hover:underline flex items-center space-x-1">
+                <i class="fas fa-book"></i>
+                <span>Docs</span>
+            </a>
+            <a href="/metrics" target="_blank" class="hover:underline flex items-center space-x-1">
+                <i class="fas fa-chart-line"></i>
+                <span>Metrics</span>
+            </a>
+            <div id="v21-cache-badge" class="bg-white bg-opacity-20 px-2 py-1 rounded">
+                Cache: <span id="v21-cache-rate">--</span>%
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================================ -->
+<!-- 2. WIDGET STATISTIQUES CACHE (Sidebar ou Dashboard) -->
+<!-- ============================================================================ -->
+
+<div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-gray-900 flex items-center">
+            <i class="fas fa-database text-blue-600 mr-2"></i>
+            Performance Cache
+        </h3>
+        <button onclick="refreshCacheStats()" class="text-blue-600 hover:text-blue-800 text-sm">
+            <i class="fas fa-sync-alt"></i> Rafraîchir
+        </button>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4 mb-4">
+        <div class="bg-blue-50 rounded-lg p-4">
+            <div class="text-xs text-gray-600 mb-1">Hit Rate</div>
+            <div id="cache-hit-rate" class="text-2xl font-bold text-blue-600">
+                --
+            </div>
+            <div class="text-xs text-gray-500 mt-1">
+                <span id="cache-performance" class="font-medium">Chargement...</span>
+            </div>
+        </div>
+
+        <div class="bg-green-50 rounded-lg p-4">
+            <div class="text-xs text-gray-600 mb-1">Économies</div>
+            <div id="cache-savings" class="text-2xl font-bold text-green-600">
+                --
+            </div>
+            <div class="text-xs text-gray-500 mt-1">Réduction coûts API</div>
+        </div>
+
+        <div class="bg-purple-50 rounded-lg p-4">
+            <div class="text-xs text-gray-600 mb-1">Entrées</div>
+            <div id="cache-entries" class="text-2xl font-bold text-purple-600">
+                --
+            </div>
+            <div class="text-xs text-gray-500 mt-1">
+                <span id="cache-hits">--</span> réutilisations
+            </div>
+        </div>
+
+        <div class="bg-orange-50 rounded-lg p-4">
+            <div class="text-xs text-gray-600 mb-1">Taille Cache</div>
+            <div id="cache-size" class="text-2xl font-bold text-orange-600">
+                --
+            </div>
+            <div class="text-xs text-gray-500 mt-1">
+                <span id="cache-expired">--</span> expirées
+            </div>
+        </div>
+    </div>
+
+    <div class="border-t pt-4">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-gray-600">Objectif: 80%</span>
+            <span class="text-sm font-medium" id="cache-target-status">--</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2">
+            <div id="cache-progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <button onclick="cleanupCache()" class="mt-4 w-full bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+        <i class="fas fa-trash-alt mr-2"></i>
+        Nettoyer Cache Expiré
+    </button>
+</div>
+
+<!-- ============================================================================ -->
+<!-- 3. WIDGET SANTÉ SYSTÈME (Dashboard) -->
+<!-- ============================================================================ -->
+
+<div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-gray-900 flex items-center">
+            <i class="fas fa-heartbeat text-red-600 mr-2"></i>
+            Santé Système
+        </h3>
+        <span id="system-status-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-600">
+            Vérification...
+        </span>
+    </div>
+
+    <div class="space-y-3">
+        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div class="flex items-center space-x-3">
+                <i id="db-icon" class="fas fa-database text-gray-400"></i>
+                <span class="text-sm font-medium">Base de données</span>
+            </div>
+            <span id="db-status" class="text-xs text-gray-500">--</span>
+        </div>
+
+        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div class="flex items-center space-x-3">
+                <i id="openai-icon" class="fas fa-brain text-gray-400"></i>
+                <span class="text-sm font-medium">OpenAI Vision</span>
+            </div>
+            <span id="openai-status" class="text-xs text-gray-500">--</span>
+        </div>
+
+        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div class="flex items-center space-x-3">
+                <i id="anthropic-icon" class="fas fa-robot text-gray-400"></i>
+                <span class="text-sm font-medium">Claude</span>
+            </div>
+            <span id="anthropic-status" class="text-xs text-gray-500">--</span>
+        </div>
+    </div>
+
+    <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+        <div class="flex items-center justify-between text-xs">
+            <span class="text-gray-600">Version:</span>
+            <span id="system-version" class="font-mono font-bold text-blue-600">--</span>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================================ -->
+<!-- 4. LIENS RAPIDES v2.1 (Menu ou Sidebar) -->
+<!-- ============================================================================ -->
+
+<div class="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg shadow p-6 mb-6">
+    <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+        <i class="fas fa-link text-purple-600 mr-2"></i>
+        Liens Rapides v2.1
+    </h3>
+
+    <div class="space-y-2">
+        <a href="/docs" target="_blank" class="flex items-center justify-between p-3 bg-white rounded-lg hover:shadow-md transition-shadow group">
+            <div class="flex items-center space-x-3">
+                <i class="fas fa-book text-blue-600"></i>
+                <div>
+                    <div class="text-sm font-medium text-gray-900 group-hover:text-blue-600">Documentation API</div>
+                    <div class="text-xs text-gray-500">Swagger UI interactif</div>
+                </div>
+            </div>
+            <i class="fas fa-external-link-alt text-gray-400 text-xs"></i>
+        </a>
+
+        <a href="/metrics" target="_blank" class="flex items-center justify-between p-3 bg-white rounded-lg hover:shadow-md transition-shadow group">
+            <div class="flex items-center space-x-3">
+                <i class="fas fa-chart-line text-green-600"></i>
+                <div>
+                    <div class="text-sm font-medium text-gray-900 group-hover:text-green-600">Métriques Prometheus</div>
+                    <div class="text-xs text-gray-500">Performance système</div>
+                </div>
+            </div>
+            <i class="fas fa-external-link-alt text-gray-400 text-xs"></i>
+        </a>
+
+        <a href="/examples" target="_blank" class="flex items-center justify-between p-3 bg-white rounded-lg hover:shadow-md transition-shadow group">
+            <div class="flex items-center space-x-3">
+                <i class="fas fa-terminal text-purple-600"></i>
+                <div>
+                    <div class="text-sm font-medium text-gray-900 group-hover:text-purple-600">Exemples Curl</div>
+                    <div class="text-xs text-gray-500">Commandes test</div>
+                </div>
+            </div>
+            <i class="fas fa-external-link-alt text-gray-400 text-xs"></i>
+        </a>
+
+        <button onclick="checkSystemHealth()" class="w-full flex items-center justify-between p-3 bg-white rounded-lg hover:shadow-md transition-shadow group">
+            <div class="flex items-center space-x-3">
+                <i class="fas fa-heartbeat text-red-600"></i>
+                <div class="text-left">
+                    <div class="text-sm font-medium text-gray-900 group-hover:text-red-600">Health Check</div>
+                    <div class="text-xs text-gray-500">Vérifier santé système</div>
+                </div>
+            </div>
+            <i class="fas fa-play text-gray-400 text-xs"></i>
+        </button>
+    </div>
+</div>
+
+<!-- ============================================================================ -->
+<!-- 5. TOAST NOTIFICATIONS (Pour événements cache) -->
+<!-- ============================================================================ -->
+
+<div id="v21-toast-container" class="fixed top-4 right-4 z-50 space-y-2" style="display: none;">
+    <!-- Les toasts apparaîtront ici dynamiquement -->
+</div>
+
+<!-- ============================================================================ -->
+<!-- JAVASCRIPT POUR TOUS LES WIDGETS -->
+<!-- ============================================================================ -->
+
+<script>
+// ============================================================================
+// FONCTIONS UTILITAIRES
+// ============================================================================
+
+// Afficher un toast
+function showToast(message, type = 'info') {
+    const container = document.getElementById('v21-toast-container');
+    container.style.display = 'block';
+
+    const colors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        warning: 'bg-yellow-500',
+        info: 'bg-blue-500'
+    };
+
+    const icons = {
+        success: 'fa-check-circle',
+        error: 'fa-exclamation-circle',
+        warning: 'fa-exclamation-triangle',
+        info: 'fa-info-circle'
+    };
+
+    const toast = document.createElement('div');
+    toast.className = `${colors[type]} text-white px-6 py-4 rounded-lg shadow-lg flex items-center space-x-3 animate-slide-in`;
+    toast.innerHTML = `
+        <i class="fas ${icons[type]}"></i>
+        <span>${message}</span>
+    `;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.remove();
+        if (container.children.length === 0) {
+            container.style.display = 'none';
+        }
+    }, 5000);
+}
+
+// ============================================================================
+// FONCTIONS CACHE
+// ============================================================================
+
+async function refreshCacheStats() {
+    try {
+        const response = await fetch('/api/cache/stats');
+        const data = await response.json();
+
+        if (data.success && data.cache_stats) {
+            const stats = data.cache_stats;
+
+            // Mettre à jour tous les éléments
+            document.getElementById('cache-hit-rate').textContent = stats.hit_rate.toFixed(1) + '%';
+            document.getElementById('cache-savings').textContent = Math.round(stats.hit_rate) + '%';
+            document.getElementById('cache-entries').textContent = stats.total_entries.toLocaleString();
+            document.getElementById('cache-hits').textContent = stats.total_hits.toLocaleString();
+            document.getElementById('cache-size').textContent = stats.cache_size_mb.toFixed(2) + ' MB';
+            document.getElementById('cache-expired').textContent = stats.expired_entries;
+
+            // Performance
+            document.getElementById('cache-performance').textContent = data.recommendations.current_performance;
+
+            // Barre de progression
+            const progressBar = document.getElementById('cache-progress-bar');
+            progressBar.style.width = Math.min(stats.hit_rate, 100) + '%';
+
+            if (stats.hit_rate >= 80) {
+                progressBar.className = 'bg-green-600 h-2 rounded-full transition-all duration-500';
+                document.getElementById('cache-target-status').textContent = '🎉 Objectif atteint !';
+            } else if (stats.hit_rate >= 60) {
+                progressBar.className = 'bg-yellow-600 h-2 rounded-full transition-all duration-500';
+                document.getElementById('cache-target-status').textContent = '⚠️ Proche';
+            } else {
+                progressBar.className = 'bg-red-600 h-2 rounded-full transition-all duration-500';
+                document.getElementById('cache-target-status').textContent = '❌ En dessous';
+            }
+
+            // Badge bannière
+            if (document.getElementById('v21-cache-rate')) {
+                document.getElementById('v21-cache-rate').textContent = stats.hit_rate.toFixed(1);
+            }
+        }
+    } catch (error) {
+        console.error('Erreur lors du chargement des stats cache:', error);
+        showToast('Impossible de charger les stats cache', 'error');
+    }
+}
+
+async function cleanupCache() {
+    if (!confirm('Nettoyer toutes les entrées expirées du cache ?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/cache/cleanup', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(`✅ ${data.deleted_entries} entrées supprimées`, 'success');
+            refreshCacheStats();
+        } else {
+            showToast('❌ Échec du nettoyage', 'error');
+        }
+    } catch (error) {
+        console.error('Erreur nettoyage cache:', error);
+        showToast('❌ Erreur lors du nettoyage', 'error');
+    }
+}
+
+// ============================================================================
+// FONCTIONS SANTÉ SYSTÈME
+// ============================================================================
+
+async function checkSystemHealth() {
+    try {
+        const response = await fetch('/readyz');
+        const data = await response.json();
+
+        const isReady = data.status === 'ready';
+
+        // Badge global
+        const badge = document.getElementById('system-status-badge');
+        if (isReady) {
+            badge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700';
+            badge.textContent = '✅ Opérationnel';
+        } else {
+            badge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700';
+            badge.textContent = '⚠️ Problème détecté';
+        }
+
+        // Status DB
+        updateServiceStatus('db', data.checks.database);
+        updateServiceStatus('openai', data.checks.openai);
+        updateServiceStatus('anthropic', data.checks.anthropic);
+
+        // Version
+        const versionResponse = await fetch('/info');
+        const versionData = await versionResponse.json();
+        if (versionData.success) {
+            document.getElementById('system-version').textContent = versionData.system.version;
+        }
+
+        if (isReady) {
+            showToast('✅ Tous les services sont opérationnels', 'success');
+        } else {
+            showToast('⚠️ Certains services ne sont pas disponibles', 'warning');
+        }
+
+    } catch (error) {
+        console.error('Erreur health check:', error);
+        showToast('❌ Impossible de vérifier la santé du système', 'error');
+    }
+}
+
+function updateServiceStatus(service, isHealthy) {
+    const icon = document.getElementById(`${service}-icon`);
+    const status = document.getElementById(`${service}-status`);
+
+    if (isHealthy) {
+        icon.className = `fas ${getServiceIcon(service)} text-green-600`;
+        status.textContent = '✅ OK';
+        status.className = 'text-xs text-green-600 font-medium';
+    } else {
+        icon.className = `fas ${getServiceIcon(service)} text-red-600`;
+        status.textContent = '❌ Indisponible';
+        status.className = 'text-xs text-red-600 font-medium';
+    }
+}
+
+function getServiceIcon(service) {
+    const icons = {
+        db: 'fa-database',
+        openai: 'fa-brain',
+        anthropic: 'fa-robot'
+    };
+    return icons[service] || 'fa-circle';
+}
+
+// ============================================================================
+// AUTO-REFRESH
+// ============================================================================
+
+// Rafraîchir les stats toutes les 30 secondes
+setInterval(refreshCacheStats, 30000);
+
+// Vérifier la santé toutes les 2 minutes
+setInterval(checkSystemHealth, 120000);
+
+// Charger au démarrage
+document.addEventListener('DOMContentLoaded', () => {
+    refreshCacheStats();
+    checkSystemHealth();
+});
+</script>
+
+<style>
+@keyframes slide-in {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.animate-slide-in {
+    animation: slide-in 0.3s ease-out;
+}
+</style>
