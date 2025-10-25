@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import { MultiExpertAISystem } from './ai-experts'
 import { photoBooksRouter } from './routes/photo-books';
 import { photosRouter } from './routes/photos';
+import { itemsRouter } from './routes/items';
 // Types pour les bindings Cloudflare
 type Bindings = {
   DB: D1Database;
@@ -2987,6 +2988,7 @@ app.get('/test-api', (c) => {
 // ============================================================================
 
 app.route('/api/photos', photosRouter);
+app.route('/api/items', itemsRouter);
 
 // ============================================================================
 // FIN DU CODE V2.1
