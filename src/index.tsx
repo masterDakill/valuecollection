@@ -2671,7 +2671,7 @@ class CollectionEvaluator {
             <div class="mb-2">
               <p class="text-xs font-semibold text-gray-700 mb-1">Prix par Condition:</p>
               <div class="grid grid-cols-2 gap-2">
-                \${Object.entries(prices.byCondition).map(([condition, data]: [string, any]) => \`
+                \${Object.entries(prices.byCondition).map(([condition, data]) => \`
                   <div class="text-xs p-2 bg-gray-50 rounded">
                     <span class="font-semibold capitalize">\${condition}:</span>
                     <span class="text-green-600 ml-1">\${data.avg.toFixed(2)} CAD$</span>
