@@ -287,6 +287,89 @@ app.get('/', async (c) => {
             </div>
         </div>
 
+        <!-- Section Collection Complète -->
+        <div class="bg-white rounded-lg shadow mb-8">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-xl font-semibold">
+                        <i class="fas fa-book mr-2 text-blue-600"></i>
+                        Collection Complète de Livres
+                    </h2>
+                    <div class="flex items-center space-x-3">
+                        <button id="refreshBooksBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm">
+                            <i class="fas fa-sync-alt mr-2"></i>Actualiser
+                        </button>
+                        <button id="enrichAllBooksBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm">
+                            <i class="fas fa-magic mr-2"></i>Enrichir Tout
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats de la collection -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-xs font-medium text-blue-600 uppercase">Total Livres</p>
+                                <p id="bookStatTotal" class="text-2xl font-bold text-blue-900">0</p>
+                            </div>
+                            <div class="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-books text-white text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-xs font-medium text-green-600 uppercase">Enrichis</p>
+                                <p id="bookStatEnriched" class="text-2xl font-bold text-green-900">0</p>
+                            </div>
+                            <div class="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-check-circle text-white text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-xs font-medium text-yellow-600 uppercase">À Enrichir</p>
+                                <p id="bookStatPending" class="text-2xl font-bold text-yellow-900">0</p>
+                            </div>
+                            <div class="w-12 h-12 bg-yellow-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-hourglass-half text-white text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-xs font-medium text-purple-600 uppercase">Valeur Totale</p>
+                                <p id="bookStatValue" class="text-2xl font-bold text-purple-900">0 CAD$</p>
+                            </div>
+                            <div class="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-dollar-sign text-white text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Liste des livres -->
+                <div id="booksCollectionList" class="space-y-4">
+                    <!-- Rempli dynamiquement par JS -->
+                </div>
+
+                <!-- Message vide -->
+                <div id="booksCollectionEmpty" class="hidden text-center py-12 text-gray-500">
+                    <i class="fas fa-book-open text-6xl mb-4 text-gray-300"></i>
+                    <p class="text-lg mb-2">Aucun livre dans votre collection</p>
+                    <p class="text-sm">Analysez une photo pour détecter des livres</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Modal Détail Photo -->
         <div id="photoModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
             <div class="min-h-screen px-4 py-8">
@@ -763,6 +846,17 @@ class CollectionEvaluator {
           this.closePhotoModal();
         }
       });
+    }
+
+    // Boutons de la collection de livres
+    const refreshBooksBtn = document.getElementById('refreshBooksBtn');
+    if (refreshBooksBtn) {
+      refreshBooksBtn.addEventListener('click', () => this.loadBooks());
+    }
+
+    const enrichAllBooksBtn = document.getElementById('enrichAllBooksBtn');
+    if (enrichAllBooksBtn) {
+      enrichAllBooksBtn.addEventListener('click', () => this.enrichAllBooks());
     }
   }
 
@@ -2160,8 +2254,9 @@ class CollectionEvaluator {
       this.loadStats();
       this.loadItems();
     } else if (pageName === 'Photos') {
-      // Recharger les photos pour la galerie
+      // Recharger les photos et les livres pour la galerie
       this.loadPhotos();
+      this.loadBooks();
     }
   }
 
@@ -2291,6 +2386,512 @@ class CollectionEvaluator {
     } catch (error) {
       console.error('Erreur export:', error);
     }
+  }
+
+  // ===== GESTION DE LA COLLECTION DE LIVRES =====
+
+  async loadBooks() {
+    try {
+      const response = await fetch('/api/items');
+      const data = await response.json();
+
+      if (data.success) {
+        this.currentBooks = data.items || [];
+        this.displayBooks(this.currentBooks);
+        this.updateBookStats(this.currentBooks);
+      }
+    } catch (error) {
+      console.error('Erreur chargement livres:', error);
+      this.showNotification('❌ Erreur lors du chargement des livres', 'error');
+    }
+  }
+
+  displayBooks(books) {
+    const container = document.getElementById('booksCollectionList');
+    const empty = document.getElementById('booksCollectionEmpty');
+
+    if (!container || !empty) return;
+
+    if (!books || books.length === 0) {
+      container.innerHTML = '';
+      empty.classList.remove('hidden');
+      return;
+    }
+
+    empty.classList.add('hidden');
+    container.innerHTML = books.map((book, index) => {
+      const isEnriched = book.artist_author && book.publisher_label && book.isbn_13;
+      const hasPrice = book.estimated_value && parseFloat(book.estimated_value) > 0;
+
+      return \`
+        <div class="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+          <div class="flex items-start justify-between gap-4">
+            <!-- Numéro et Image -->
+            <div class="flex items-start gap-4">
+              <div class="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full font-semibold">
+                \${index + 1}
+              </div>
+              \${book.primary_image_url ? \`
+                <img src="\${book.primary_image_url}" alt="Couverture" class="w-16 h-20 object-cover rounded shadow-sm">
+              \` : ''}
+            </div>
+
+            <!-- Informations principales -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-start justify-between gap-4">
+                <div class="flex-1">
+                  <h3 class="text-lg font-semibold text-gray-900 mb-2">\${this.escapeHtml(book.title)}</h3>
+
+                  <div class="space-y-1 text-sm">
+                    \${book.artist_author ? \`
+                      <p class="text-gray-700">
+                        <i class="fas fa-user w-5 text-gray-400"></i>
+                        <strong>Auteur:</strong> \${this.escapeHtml(book.artist_author)}
+                      </p>
+                    \` : '<p class="text-gray-400 italic"><i class="fas fa-user w-5"></i>Auteur non renseigné</p>'}
+
+                    \${book.publisher_label ? \`
+                      <p class="text-gray-700">
+                        <i class="fas fa-building w-5 text-gray-400"></i>
+                        <strong>Éditeur:</strong> \${this.escapeHtml(book.publisher_label)}
+                      </p>
+                    \` : '<p class="text-gray-400 italic"><i class="fas fa-building w-5"></i>Éditeur non renseigné</p>'}
+
+                    \${book.year ? \`
+                      <p class="text-gray-600">
+                        <i class="fas fa-calendar w-5 text-gray-400"></i>
+                        <strong>Année:</strong> \${book.year}
+                      </p>
+                    \` : ''}
+
+                    \${book.isbn_13 ? \`
+                      <p class="text-gray-600 font-mono text-xs">
+                        <i class="fas fa-barcode w-5 text-gray-400"></i>
+                        <strong>ISBN-13:</strong> \${book.isbn_13}
+                      </p>
+                    \` : '<p class="text-gray-400 italic"><i class="fas fa-barcode w-5"></i>ISBN non renseigné</p>'}
+                  </div>
+
+                  <div class="mt-3 flex items-center gap-3 text-xs text-gray-500">
+                    <span><i class="fas fa-camera mr-1"></i>Photo #\${book.photo_id || 'N/A'}</span>
+                    <span><i class="fas fa-clock mr-1"></i>\${new Date(book.created_at).toLocaleDateString('fr-FR')}</span>
+                    \${book.detection_confidence ? \`
+                      <span class="px-2 py-1 rounded-full \${book.detection_confidence > 0.9 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                        \${Math.round(book.detection_confidence * 100)}% confiance
+                      </span>
+                    \` : ''}
+                  </div>
+                </div>
+
+                <!-- Prix et Actions -->
+                <div class="flex flex-col items-end gap-2">
+                  \${hasPrice ? \`
+                    <div class="text-right">
+                      <p class="text-xs text-gray-500">Valeur estimée</p>
+                      <p class="text-2xl font-bold text-green-600">\${parseFloat(book.estimated_value).toFixed(2)} CAD$</p>
+                    </div>
+                  \` : \`
+                    <div class="text-right">
+                      <p class="text-xs text-gray-400">Valeur estimée</p>
+                      <p class="text-lg font-medium text-gray-400">N/A</p>
+                    </div>
+                  \`}
+
+                  \${!isEnriched ? \`
+                    <button onclick="window.app.enrichBook(\${book.id})"
+                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm whitespace-nowrap">
+                      <i class="fas fa-magic mr-1"></i>Enrichir
+                    </button>
+                  \` : \`
+                    <div class="px-4 py-2 bg-green-100 text-green-800 rounded-lg text-sm text-center whitespace-nowrap">
+                      <i class="fas fa-check-circle mr-1"></i>Complet
+                    </div>
+                  \`}
+
+                  \${isEnriched ? \`
+                    <button onclick="window.app.evaluateBook(\${book.id})"
+                            class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition text-sm whitespace-nowrap">
+                      <i class="fas fa-brain mr-1"></i>Évaluation IA
+                    </button>
+                  \` : ''}
+                </div>
+              </div>
+
+              <!-- Zone d'évaluation (cachée par défaut) -->
+              <div id="evaluation-\${book.id}" class="hidden mt-4 p-4 bg-gray-50 rounded-lg border-t border-gray-200">
+                <!-- Résultats d'évaluation IA affichés ici -->
+              </div>
+            </div>
+          </div>
+        </div>
+      \`;
+    }).join('');
+  }
+
+  updateBookStats(books) {
+    const total = books.length;
+    const enriched = books.filter(b => b.artist_author && b.publisher_label && b.isbn_13).length;
+    const pending = total - enriched;
+    const totalValue = books.reduce((sum, book) => sum + (parseFloat(book.estimated_value) || 0), 0);
+
+    const statTotal = document.getElementById('bookStatTotal');
+    const statEnriched = document.getElementById('bookStatEnriched');
+    const statPending = document.getElementById('bookStatPending');
+    const statValue = document.getElementById('bookStatValue');
+
+    if (statTotal) statTotal.textContent = total;
+    if (statEnriched) statEnriched.textContent = enriched;
+    if (statPending) statPending.textContent = pending;
+    if (statValue) statValue.textContent = totalValue > 0 ? \`\${totalValue.toFixed(2)} CAD$\` : '0 CAD$';
+  }
+
+  async enrichBook(bookId) {
+    this.showNotification('🔍 Enrichissement en cours...', 'info');
+
+    try {
+      const response = await fetch(\`/api/items/\${bookId}/enrich\`, {
+        method: 'POST'
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        this.showNotification(\`✅ Livre enrichi depuis \${data.enrichment.source}\`, 'success');
+        await this.loadBooks(); // Recharger pour afficher les nouvelles données
+      } else {
+        this.showNotification(\`❌ \${data.error?.message || 'Enrichissement échoué'}\`, 'error');
+      }
+    } catch (error) {
+      console.error('Erreur enrichissement:', error);
+      this.showNotification('❌ Erreur lors de l\\'enrichissement', 'error');
+    }
+  }
+
+  async enrichAllBooks() {
+    const pending = (this.currentBooks || []).filter(b => !b.artist_author || !b.publisher_label || !b.isbn_13).length;
+
+    if (pending === 0) {
+      this.showNotification('✅ Tous les livres sont déjà enrichis', 'info');
+      return;
+    }
+
+    if (!confirm(\`Enrichir \${pending} livre(s)? Cela peut prendre quelques minutes.\`)) {
+      return;
+    }
+
+    this.showNotification(\`🔄 Enrichissement de \${pending} livres en cours...\`, 'info');
+
+    try {
+      const response = await fetch('/api/items/enrich-all', {
+        method: 'POST'
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        this.showNotification(\`✅ \${data.processed} livre(s) enrichi(s), \${data.failed} échec(s)\`, 'success');
+        await this.loadBooks();
+      } else {
+        this.showNotification('❌ Enrichissement batch échoué', 'error');
+      }
+    } catch (error) {
+      console.error('Erreur batch enrichissement:', error);
+      this.showNotification('❌ Erreur lors de l\\'enrichissement batch', 'error');
+    }
+  }
+
+  async evaluateBook(bookId) {
+    this.showNotification('🤖 Évaluation IA en cours (cela peut prendre 10-15 secondes)...', 'info');
+
+    try {
+      const response = await fetch(\`/api/items/\${bookId}/evaluate\`, {
+        method: 'POST'
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        this.displayEvaluation(bookId, data.evaluation);
+
+        // Mettre à jour le prix localement dans l'objet book
+        const book = this.bookManager.books.find(b => b.id === bookId);
+        if (book && data.evaluation.rarity) {
+          book.estimated_value = data.evaluation.rarity.estimatedValue;
+          // Re-render le livre pour afficher le nouveau prix
+          this.renderBooks();
+        }
+
+        this.showNotification('✅ Évaluation IA complète terminée!', 'success');
+      } else {
+        this.showNotification(\`❌ \${data.error?.message || 'Évaluation échouée'}\`, 'error');
+      }
+    } catch (error) {
+      console.error('Erreur évaluation:', error);
+      this.showNotification('❌ Erreur lors de l\\'évaluation IA', 'error');
+    }
+  }
+
+  displayEvaluation(bookId, evaluation) {
+    const container = document.getElementById(\`evaluation-\${bookId}\`);
+    if (!container) return;
+
+    const { prices, rarity, editions } = evaluation;
+
+    container.innerHTML = \`
+      <h4 class="font-bold text-lg mb-4 text-purple-700">
+        <i class="fas fa-chart-line mr-2"></i>Analyse Complète IA
+      </h4>
+
+      <!-- Prix Multi-Sources -->
+      \${prices ? \`
+        <div class="mb-4 p-3 bg-white rounded-lg border border-gray-200">
+          <h5 class="font-semibold text-green-700 mb-3">
+            <i class="fas fa-dollar-sign mr-1"></i>Analyse de Prix (\${prices.count} sources)
+          </h5>
+
+          <!-- Statistiques de Distribution -->
+          <div class="grid grid-cols-4 gap-2 mb-3">
+            <div class="text-center p-2 bg-blue-50 rounded">
+              <p class="text-xs text-gray-600">Min</p>
+              <p class="text-sm font-bold text-blue-700">\${prices.min.toFixed(2)}</p>
+            </div>
+            <div class="text-center p-2 bg-green-50 rounded">
+              <p class="text-xs text-gray-600">Médiane</p>
+              <p class="text-sm font-bold text-green-700">\${prices.median.toFixed(2)}</p>
+            </div>
+            <div class="text-center p-2 bg-yellow-50 rounded">
+              <p class="text-xs text-gray-600">Moyenne</p>
+              <p class="text-sm font-bold text-yellow-700">\${prices.average.toFixed(2)}</p>
+            </div>
+            <div class="text-center p-2 bg-red-50 rounded">
+              <p class="text-xs text-gray-600">Max</p>
+              <p class="text-sm font-bold text-red-700">\${prices.max.toFixed(2)}</p>
+            </div>
+          </div>
+
+          <!-- Prix par Condition -->
+          \${Object.keys(prices.byCondition).length > 0 ? \`
+            <div class="mb-2">
+              <p class="text-xs font-semibold text-gray-700 mb-1">Prix par Condition:</p>
+              <div class="grid grid-cols-2 gap-2">
+                \${Object.entries(prices.byCondition).map(([condition, data]: [string, any]) => \`
+                  <div class="text-xs p-2 bg-gray-50 rounded">
+                    <span class="font-semibold capitalize">\${condition}:</span>
+                    <span class="text-green-600 ml-1">\${data.avg.toFixed(2)} CAD$</span>
+                    <span class="text-gray-500">(\${data.count})</span>
+                  </div>
+                \`).join('')}
+              </div>
+            </div>
+          \` : ''}
+
+          <details class="mt-2">
+            <summary class="cursor-pointer text-xs text-blue-600 hover:underline">
+              <i class="fas fa-list mr-1"></i>Détails par source (\${prices.sources.length})
+            </summary>
+            <div class="mt-2 space-y-1">
+              \${prices.sources.map(s => \`
+                <div class="text-xs p-2 bg-gray-50 rounded flex justify-between">
+                  <span><strong>\${s.source}:</strong> \${s.condition}</span>
+                  <span class="font-semibold">\${s.price.toFixed(2)} CAD$</span>
+                </div>
+              \`).join('')}
+            </div>
+          </details>
+        </div>
+      \` : '<p class="text-gray-400">Prix non disponibles</p>'}
+
+      <!-- Comparaison des Éditions -->
+      \${editions && editions.totalEditionsFound > 0 ? \`
+        <div class="mb-4 p-4 bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg border border-amber-200">
+          <h5 class="font-semibold text-amber-800 mb-3">
+            <i class="fas fa-book-open mr-1"></i>Éditions Disponibles (\${editions.totalEditionsFound})
+          </h5>
+
+          <!-- Éditions Remarquables -->
+          \${editions.mostRare || editions.mostValuable ? \`
+            <div class="grid grid-cols-2 gap-2 mb-3">
+              \${editions.mostRare ? \`
+                <div class="p-3 bg-white rounded border border-amber-300">
+                  <p class="text-xs text-gray-600 mb-1">📜 Plus Ancienne</p>
+                  <p class="text-sm font-semibold text-amber-900">\${editions.mostRare.publishedDate || 'N/A'}</p>
+                  <p class="text-xs text-gray-700 truncate">\${this.escapeHtml(editions.mostRare.publisher || 'Éditeur inconnu')}</p>
+                  \${editions.mostRare.isbn13 ? \`<p class="text-xs text-gray-500 mt-1">ISBN: \${editions.mostRare.isbn13}</p>\` : ''}
+                </div>
+              \` : ''}
+              \${editions.mostValuable ? \`
+                <div class="p-3 bg-white rounded border border-amber-300">
+                  <p class="text-xs text-gray-600 mb-1">💎 Plus Valorisée</p>
+                  <p class="text-sm font-semibold text-amber-900">\${editions.mostValuable.format || 'N/A'}</p>
+                  <p class="text-xs text-gray-700 truncate">\${this.escapeHtml(editions.mostValuable.publisher || 'Éditeur inconnu')}</p>
+                  \${editions.mostValuable.publishedDate ? \`<p class="text-xs text-gray-500 mt-1">\${editions.mostValuable.publishedDate}</p>\` : ''}
+                </div>
+              \` : ''}
+            </div>
+          \` : ''}
+
+          <!-- Liste des Éditions -->
+          <details class="mt-2">
+            <summary class="cursor-pointer text-xs text-amber-700 hover:underline font-semibold">
+              <i class="fas fa-list mr-1"></i>Voir toutes les éditions (\${editions.editions.length})
+            </summary>
+            <div class="mt-3 space-y-2 max-h-96 overflow-y-auto">
+              \${editions.editions.slice(0, 20).map((edition, idx) => \`
+                <div class="text-xs p-3 bg-white rounded border border-amber-200 hover:border-amber-400 transition">
+                  <div class="flex justify-between items-start mb-2">
+                    <div class="flex-1">
+                      <p class="font-semibold text-gray-800">\${this.escapeHtml(edition.title || 'Titre inconnu')}</p>
+                      <p class="text-gray-600 mt-1">\${this.escapeHtml(edition.publisher || 'Éditeur inconnu')}</p>
+                    </div>
+                    <span class="ml-2 px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-medium">
+                      \${edition.format || 'N/A'}
+                    </span>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                    \${edition.publishedDate ? \`
+                      <div>
+                        <i class="fas fa-calendar mr-1"></i>
+                        <span>\${edition.publishedDate}</span>
+                      </div>
+                    \` : ''}
+                    \${edition.language ? \`
+                      <div>
+                        <i class="fas fa-language mr-1"></i>
+                        <span>\${edition.language.toUpperCase()}</span>
+                      </div>
+                    \` : ''}
+                  </div>
+
+                  \${edition.isbn13 || edition.isbn10 ? \`
+                    <div class="mt-2 pt-2 border-t border-amber-100">
+                      \${edition.isbn13 ? \`<p class="text-xs text-gray-600"><strong>ISBN-13:</strong> \${edition.isbn13}</p>\` : ''}
+                      \${edition.isbn10 ? \`<p class="text-xs text-gray-600"><strong>ISBN-10:</strong> \${edition.isbn10}</p>\` : ''}
+                    </div>
+                  \` : ''}
+
+                  \${edition.pageCount ? \`
+                    <p class="text-xs text-gray-500 mt-1">
+                      <i class="fas fa-file-alt mr-1"></i>\${edition.pageCount} pages
+                    </p>
+                  \` : ''}
+                </div>
+              \`).join('')}
+              \${editions.editions.length > 20 ? \`
+                <p class="text-xs text-gray-500 text-center py-2">
+                  ... et \${editions.editions.length - 20} autre(s) édition(s)
+                </p>
+              \` : ''}
+            </div>
+          </details>
+
+          <!-- Recommandations -->
+          \${editions.recommendations && editions.recommendations.length > 0 ? \`
+            <div class="mt-3 p-3 bg-amber-50 rounded border border-amber-200">
+              <p class="text-xs font-semibold text-amber-800 mb-2">
+                <i class="fas fa-lightbulb mr-1"></i>Recommandations:
+              </p>
+              <ul class="list-disc pl-5 text-xs text-gray-700 space-y-1">
+                \${editions.recommendations.map(r => \`<li>\${this.escapeHtml(r)}</li>\`).join('')}
+              </ul>
+            </div>
+          \` : ''}
+        </div>
+      \` : ''}
+
+      <!-- Analyse Rareté IA -->
+      <div class="mb-4 p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg border border-purple-200">
+        <h5 class="font-semibold text-purple-800 mb-2">
+          <i class="fas fa-brain mr-1"></i>Analyse IA de Rareté
+        </h5>
+
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <p class="text-3xl font-bold text-purple-900">
+              \${rarity.rarityLevel.toUpperCase().replace('_', ' ')}
+            </p>
+            <p class="text-sm text-purple-700">Score: \${rarity.rarityScore}/10</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-gray-600">Valeur recommandée</p>
+            <p class="text-2xl font-bold text-green-600">\${rarity.estimatedValue.toFixed(2)} CAD$</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 mb-3 text-sm">
+          <div class="bg-white/50 p-2 rounded">
+            <p class="text-xs text-gray-600">Demande</p>
+            <p class="font-semibold text-purple-800">\${rarity.demandLevel.toUpperCase()}</p>
+          </div>
+          <div class="bg-white/50 p-2 rounded">
+            <p class="text-xs text-gray-600">Potentiel investissement</p>
+            <p class="font-semibold text-purple-800">\${rarity.investmentPotential}/10</p>
+          </div>
+        </div>
+
+        <div class="mb-2">
+          <p class="text-xs font-semibold text-purple-700 mb-1">Facteurs clés:</p>
+          <ul class="list-disc pl-5 text-sm text-gray-700 space-y-1">
+            \${rarity.factors.map(f => \`<li>\${this.escapeHtml(f)}</li>\`).join('')}
+          </ul>
+        </div>
+
+        \${rarity.specialFeatures && rarity.specialFeatures.length > 0 ? \`
+          <div class="mt-2">
+            <p class="text-xs font-semibold text-purple-700">Caractéristiques spéciales:</p>
+            <div class="flex flex-wrap gap-1 mt-1">
+              \${rarity.specialFeatures.map(f => \`
+                <span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">
+                  \${this.escapeHtml(f)}
+                </span>
+              \`).join('')}
+            </div>
+          </div>
+        \` : ''}
+
+        <p class="mt-3 text-xs text-gray-600 italic">\${this.escapeHtml(rarity.notes)}</p>
+        <p class="text-xs text-gray-500 mt-1">Confiance: \${Math.round(rarity.confidence * 100)}%</p>
+      </div>
+
+      <!-- Comparaison Éditions -->
+      <div class="p-3 bg-white rounded-lg border border-gray-200">
+        <h5 class="font-semibold text-blue-700 mb-2">
+          <i class="fas fa-books mr-1"></i>\${editions.totalEditionsFound} Éditions Trouvées
+        </h5>
+
+        \${editions.mostRare ? \`
+          <div class="mb-2 p-2 bg-yellow-50 rounded border-l-4 border-yellow-400">
+            <p class="text-xs font-semibold text-yellow-800">📖 Plus ancienne (potentiellement première édition)</p>
+            <p class="text-sm">\${this.escapeHtml(editions.mostRare.title)}</p>
+            <p class="text-xs text-gray-600">
+              \${editions.mostRare.publisher || 'Éditeur inconnu'} - \${editions.mostRare.publishedDate || 'Date inconnue'}
+            </p>
+          </div>
+        \` : ''}
+
+        \${editions.mostValuable ? \`
+          <div class="mb-2 p-2 bg-green-50 rounded border-l-4 border-green-400">
+            <p class="text-xs font-semibold text-green-800">💎 Plus valorisée</p>
+            <p class="text-sm">\${editions.mostValuable.format || 'Format inconnu'} - \${editions.mostValuable.publisher || 'Éditeur inconnu'}</p>
+          </div>
+        \` : ''}
+
+        <details class="mt-2">
+          <summary class="cursor-pointer text-xs text-blue-600 hover:underline">
+            Recommandations (\${editions.recommendations.length})
+          </summary>
+          <ul class="list-disc pl-5 text-xs text-gray-700 mt-2 space-y-1">
+            \${editions.recommendations.map(r => \`<li>\${this.escapeHtml(r)}</li>\`).join('')}
+          </ul>
+        </details>
+      </div>
+    \`;
+
+    container.classList.remove('hidden');
+  }
+
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 }
 

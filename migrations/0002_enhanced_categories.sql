@@ -1,7 +1,7 @@
 -- Migration pour support des nouvelles catégories et fonctionnalités avancées
 
 -- Ajouter nouvelles colonnes pour média enrichis
-ALTER TABLE collection_items ADD COLUMN video_url TEXT;
+-- Note: video_url existe déjà dans 0001_initial_schema.sql
 ALTER TABLE collection_items ADD COLUMN additional_videos TEXT; -- JSON array des URLs vidéos
 ALTER TABLE collection_items ADD COLUMN extracted_text TEXT; -- Texte extrait par OCR/IA
 ALTER TABLE collection_items ADD COLUMN rarity_score INTEGER DEFAULT 0; -- Score de rareté 0-100

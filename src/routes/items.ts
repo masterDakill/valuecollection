@@ -6,10 +6,16 @@
 import { Hono } from 'hono';
 import { createLogger } from '../lib/logger';
 import { createBookEnrichmentService } from '../services/book-enrichment.service';
+import { createPriceAggregatorService } from '../services/price-aggregator.service';
+import { createRarityAnalyzerService } from '../services/rarity-analyzer.service';
+import { createEditionComparatorService } from '../services/edition-comparator.service';
 
 type Bindings = {
   DB: D1Database;
   GOOGLE_BOOKS_API_KEY?: string;
+  OPENAI_API_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
+  GEMINI_API_KEY?: string;
 };
 
 export const itemsRouter = new Hono<{ Bindings: Bindings }>();
@@ -126,7 +132,7 @@ itemsRouter.post('/:id/enrich', async (c) => {
       }, 404);
     }
 
-    // Update the item with enriched data
+    // Update the item with enriched data (convert undefined to null for D1)
     await db.prepare(`
       UPDATE collection_items
       SET
@@ -138,12 +144,12 @@ itemsRouter.post('/:id/enrich', async (c) => {
         primary_image_url = COALESCE(primary_image_url, ?)
       WHERE id = ?
     `).bind(
-      enrichedData.authors?.join(', '),
-      enrichedData.publisher,
-      enrichedData.publishedDate?.substring(0, 4), // Extract year
-      enrichedData.isbn10,
-      enrichedData.isbn13,
-      enrichedData.imageUrl,
+      enrichedData.authors?.join(', ') || null,
+      enrichedData.publisher || null,
+      enrichedData.publishedDate?.substring(0, 4) || null, // Extract year
+      enrichedData.isbn10 || null,
+      enrichedData.isbn13 || null,
+      enrichedData.imageUrl || null,
       itemId
     ).run();
 
@@ -247,12 +253,12 @@ itemsRouter.post('/enrich-all', async (c) => {
               primary_image_url = COALESCE(primary_image_url, ?)
             WHERE id = ?
           `).bind(
-            enrichedData.authors?.join(', '),
-            enrichedData.publisher,
-            enrichedData.publishedDate?.substring(0, 4),
-            enrichedData.isbn10,
-            enrichedData.isbn13,
-            enrichedData.imageUrl,
+            enrichedData.authors?.join(', ') || null,
+            enrichedData.publisher || null,
+            enrichedData.publishedDate?.substring(0, 4) || null,
+            enrichedData.isbn10 || null,
+            enrichedData.isbn13 || null,
+            enrichedData.imageUrl || null,
             item.id
           ).run();
 
@@ -286,6 +292,125 @@ itemsRouter.post('/enrich-all', async (c) => {
       success: false,
       error: {
         code: 'BATCH_ENRICHMENT_ERROR',
+        message: error.message
+      }
+    }, 500);
+  }
+});
+
+/**
+ * POST /api/items/:id/evaluate
+ * Évaluation complète: prix multi-sources + analyse IA + comparaison éditions
+ */
+itemsRouter.post('/:id/evaluate', async (c) => {
+  const requestId = crypto.randomUUID();
+  const logger = createLogger(requestId);
+
+  try {
+    const itemId = c.req.param('id');
+    const db = c.env.DB;
+
+    logger.info('Starting complete evaluation', { itemId });
+
+    // Get book from database
+    const book = await db.prepare(`
+      SELECT * FROM collection_items WHERE id = ?
+    `).bind(itemId).first();
+
+    if (!book) {
+      return c.json({
+        success: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: `Book ${itemId} not found`
+        }
+      }, 404);
+    }
+
+    // Vérifier qu'on a les données minimales
+    if (!book.title) {
+      return c.json({
+        success: false,
+        error: {
+          code: 'INSUFFICIENT_DATA',
+          message: 'Book title is required for evaluation'
+        }
+      }, 400);
+    }
+
+    // 1. Prix multi-sources
+    logger.info('Fetching prices from multiple sources');
+    const priceService = createPriceAggregatorService();
+    const prices = await priceService.aggregatePrices(
+      book.isbn_13 as string || '',
+      book.title as string
+    );
+
+    // 2. Analyse rareté IA avec rotation automatique entre LLMs
+    logger.info('Analyzing rarity with AI');
+    const rarityService = createRarityAnalyzerService(
+      c.env.OPENAI_API_KEY,
+      c.env.ANTHROPIC_API_KEY,
+      c.env.GEMINI_API_KEY
+    );
+
+    const rarity = await rarityService.analyzeRarity(
+      {
+        title: book.title as string,
+        author: book.artist_author as string | undefined,
+        publisher: book.publisher_label as string | undefined,
+        year: book.year as number | undefined,
+        isbn13: book.isbn_13 as string | undefined
+      },
+      {
+        totalListings: prices?.count || 0,
+        avgPrice: prices?.average || 0,
+        minPrice: prices?.min || 0,
+        maxPrice: prices?.max || 0,
+        recentSales: 15, // Simulé pour l'instant
+        pricesByCondition: prices?.byCondition || {}
+      }
+    );
+
+    // 3. Comparaison éditions
+    logger.info('Comparing editions');
+    const editionService = createEditionComparatorService(c.env.GOOGLE_BOOKS_API_KEY || '');
+    const editions = await editionService.compareEditions(
+      book.title as string,
+      book.artist_author as string | undefined
+    );
+
+    // 4. Mettre à jour estimated_value dans la DB
+    await db.prepare(`
+      UPDATE collection_items
+      SET estimated_value = ?
+      WHERE id = ?
+    `).bind(rarity.estimatedValue, itemId).run();
+
+    logger.info('Complete evaluation finished', {
+      itemId,
+      rarityScore: rarity.rarityScore,
+      estimatedValue: rarity.estimatedValue,
+      editionsFound: editions.totalEditionsFound
+    });
+
+    return c.json({
+      success: true,
+      evaluation: {
+        prices,
+        rarity,
+        editions
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error: any) {
+    logger.error('Complete evaluation failed', { error: error.message });
+
+    return c.json({
+      success: false,
+      error: {
+        code: 'EVALUATION_ERROR',
         message: error.message
       }
     }, 500);

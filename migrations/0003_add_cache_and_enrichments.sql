@@ -29,20 +29,12 @@ CREATE INDEX IF NOT EXISTS idx_api_cache_hit_count ON api_cache(hit_count DESC);
 -- TABLE : Enrichissements Collection Items (Support vidéo, OCR, métadonnées)
 -- -----------------------------------------------------------------------------
 
--- Ajouter colonnes si elles n'existent pas
-ALTER TABLE collection_items ADD COLUMN video_url TEXT;
-ALTER TABLE collection_items ADD COLUMN additional_videos TEXT; -- JSON array
-ALTER TABLE collection_items ADD COLUMN extracted_text TEXT;    -- OCR results
-
--- Métadonnées spécialisées
-ALTER TABLE collection_items ADD COLUMN format_details TEXT;    -- LP, CD, hardcover, etc.
-ALTER TABLE collection_items ADD COLUMN catalog_number TEXT;    -- Numéro catalogue
-ALTER TABLE collection_items ADD COLUMN matrix_number TEXT;     -- Numéro matrice vinyles
-ALTER TABLE collection_items ADD COLUMN label_name TEXT;        -- Label/éditeur
-ALTER TABLE collection_items ADD COLUMN edition_details TEXT;   -- Détails édition
-ALTER TABLE collection_items ADD COLUMN pressing_info TEXT;     -- first, reissue, etc.
-ALTER TABLE collection_items ADD COLUMN rarity_score INTEGER;   -- 0-100
-ALTER TABLE collection_items ADD COLUMN market_demand TEXT;     -- high, medium, low
+-- NOTE: Les colonnes ci-dessous ont déjà été ajoutées dans les migrations précédentes:
+-- - video_url (0001_initial_schema.sql)
+-- - additional_videos, extracted_text, format_details, catalog_number,
+--   matrix_number, label_name, edition_details, pressing_info,
+--   rarity_score, market_demand (0002_enhanced_categories.sql)
+-- Par conséquent, ces ALTER TABLE ont été commentés pour éviter les doublons.
 
 -- -----------------------------------------------------------------------------
 -- TABLE : Identifiants Externes Multiples
