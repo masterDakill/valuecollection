@@ -1,0 +1,396 @@
+{
+  "name": "ValueCollection → Google Sheets (Minimal)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": 1,
+        "maxResults": 1
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        },
+        "restore": {},
+        "expect": [
+          {
+            "name": "run_id",
+            "type": "text",
+            "label": "Run ID",
+            "required": false
+          },
+          {
+            "name": "timestamp",
+            "type": "text",
+            "label": "Timestamp",
+            "required": false
+          },
+          {
+            "name": "source",
+            "type": "text",
+            "label": "Source"
+          },
+          {
+            "name": "photo_url",
+            "type": "text",
+            "label": "Photo URL"
+          },
+          {
+            "name": "titre",
+            "type": "text",
+            "label": "Titre",
+            "required": true
+          },
+          {
+            "name": "auteur",
+            "type": "text",
+            "label": "Auteur"
+          },
+          {
+            "name": "editeur",
+            "type": "text",
+            "label": "Éditeur"
+          },
+          {
+            "name": "annee",
+            "type": "number",
+            "label": "Année"
+          },
+          {
+            "name": "ISBN_10",
+            "type": "text",
+            "label": "ISBN-10"
+          },
+          {
+            "name": "ISBN_13",
+            "type": "text",
+            "label": "ISBN-13"
+          },
+          {
+            "name": "etat",
+            "type": "text",
+            "label": "État"
+          },
+          {
+            "name": "notes",
+            "type": "text",
+            "label": "Notes"
+          },
+          {
+            "name": "prix_estime_cad",
+            "type": "number",
+            "label": "Prix Estimé CAD"
+          },
+          {
+            "name": "prix_min_cad",
+            "type": "number",
+            "label": "Prix Min CAD"
+          },
+          {
+            "name": "prix_max_cad",
+            "type": "number",
+            "label": "Prix Max CAD"
+          },
+          {
+            "name": "devise_source",
+            "type": "text",
+            "label": "Devise Source"
+          },
+          {
+            "name": "prix_confiance",
+            "type": "number",
+            "label": "Prix Confiance"
+          },
+          {
+            "name": "comps_count",
+            "type": "number",
+            "label": "Nombre Comparables"
+          },
+          {
+            "name": "prix_source",
+            "type": "text",
+            "label": "Prix Source"
+          },
+          {
+            "name": "ebay_url_top",
+            "type": "text",
+            "label": "eBay URL Top"
+          },
+          {
+            "name": "cout_acquisition_cad",
+            "type": "number",
+            "label": "Coût Acquisition CAD"
+          },
+          {
+            "name": "date_acquisition",
+            "type": "text",
+            "label": "Date Acquisition"
+          },
+          {
+            "name": "emplacement",
+            "type": "text",
+            "label": "Emplacement"
+          },
+          {
+            "name": "proprietaire",
+            "type": "text",
+            "label": "Propriétaire"
+          },
+          {
+            "name": "plateforme_vente",
+            "type": "text",
+            "label": "Plateforme Vente"
+          },
+          {
+            "name": "prix_affichage_cad",
+            "type": "number",
+            "label": "Prix Affichage CAD"
+          },
+          {
+            "name": "statut_vente",
+            "type": "text",
+            "label": "Statut Vente"
+          },
+          {
+            "name": "hash_fichier",
+            "type": "text",
+            "label": "Hash Fichier"
+          },
+          {
+            "name": "agent",
+            "type": "text",
+            "label": "Agent"
+          }
+        ],
+        "interface": [
+          {
+            "name": "x-make-apikey",
+            "type": "text",
+            "label": "API Key Header",
+            "required": true
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "module": "google-sheets:addRow",
+      "version": 3,
+      "parameters": {
+        "__IMTCONN__": 123456
+      },
+      "mapper": {
+        "select": "map",
+        "spreadsheetId": "/YOUR_SPREADSHEET_ID/",
+        "sheetId": "/YOUR_SHEET_ID/",
+        "includesHeaders": "true",
+        "valueInputOption": "USER_ENTERED",
+        "insertDataOption": "INSERT_ROWS",
+        "values": [
+          {
+            "column": "A",
+            "value": "{{if(1.run_id; 1.run_id; \"vc-\" + formatDate(now; \"YYYYMMDD\") + \"-\" + substring(now; 14; 5))}}"
+          },
+          {
+            "column": "B",
+            "value": "{{if(1.timestamp; 1.timestamp; formatDate(now; \"YYYY-MM-DDTHH:mm:ssZ\"))}}"
+          },
+          {
+            "column": "C",
+            "value": "{{1.source}}"
+          },
+          {
+            "column": "D",
+            "value": "{{1.photo_url}}"
+          },
+          {
+            "column": "E",
+            "value": "{{1.titre}}"
+          },
+          {
+            "column": "F",
+            "value": "{{1.auteur}}"
+          },
+          {
+            "column": "G",
+            "value": "{{1.editeur}}"
+          },
+          {
+            "column": "H",
+            "value": "{{if(1.annee = 0; \"\"; 1.annee)}}"
+          },
+          {
+            "column": "I",
+            "value": "{{1.ISBN_10}}"
+          },
+          {
+            "column": "J",
+            "value": "{{1.ISBN_13}}"
+          },
+          {
+            "column": "K",
+            "value": "{{1.etat}}"
+          },
+          {
+            "column": "L",
+            "value": "{{1.notes}}"
+          },
+          {
+            "column": "M",
+            "value": "{{1.prix_estime_cad}}"
+          },
+          {
+            "column": "N",
+            "value": "{{1.prix_min_cad}}"
+          },
+          {
+            "column": "O",
+            "value": "{{1.prix_max_cad}}"
+          },
+          {
+            "column": "P",
+            "value": "{{1.devise_source}}"
+          },
+          {
+            "column": "Q",
+            "value": "{{1.prix_confiance}}"
+          },
+          {
+            "column": "R",
+            "value": "{{1.comps_count}}"
+          },
+          {
+            "column": "S",
+            "value": "{{1.prix_source}}"
+          },
+          {
+            "column": "T",
+            "value": "{{1.ebay_url_top}}"
+          },
+          {
+            "column": "U",
+            "value": "{{1.cout_acquisition_cad}}"
+          },
+          {
+            "column": "V",
+            "value": "{{1.date_acquisition}}"
+          },
+          {
+            "column": "W",
+            "value": "{{1.emplacement}}"
+          },
+          {
+            "column": "X",
+            "value": "{{1.proprietaire}}"
+          },
+          {
+            "column": "Y",
+            "value": "{{1.plateforme_vente}}"
+          },
+          {
+            "column": "Z",
+            "value": "{{if(1.prix_affichage_cad = 0 and 1.prix_estime_cad > 0; round(1.prix_estime_cad * 1.1; 2); 1.prix_affichage_cad)}}"
+          },
+          {
+            "column": "AA",
+            "value": "{{1.statut_vente}}"
+          },
+          {
+            "column": "AB",
+            "value": "{{1.hash_fichier}}"
+          },
+          {
+            "column": "AC",
+            "value": "{{1.agent}}"
+          }
+        ]
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        },
+        "restore": {
+          "expect": {
+            "select": {
+              "label": "Enter Manually"
+            },
+            "includesHeaders": {
+              "mode": "chose",
+              "label": "Yes"
+            },
+            "valueInputOption": {
+              "mode": "chose",
+              "label": "User entered"
+            },
+            "insertDataOption": {
+              "mode": "chose",
+              "label": "Insert rows"
+            }
+          },
+          "parameters": {
+            "__IMTCONN__": {
+              "data": {
+                "scoped": "true",
+                "connection": "google"
+              },
+              "label": "My Google Sheets Connection"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "gateway:WebhookRespond",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "status": "200",
+        "body": "{{toString(\n  {\n    \"success\": true,\n    \"message\": \"✅ Données ajoutées à Google Sheets\",\n    \"titre\": 1.titre,\n    \"timestamp\": formatDate(now; \"YYYY-MM-DDTHH:mm:ssZ\")\n  }\n)}}",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ]
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        },
+        "restore": {
+          "expect": {
+            "headers": {
+              "mode": "chose",
+              "items": [
+                null
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": false,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "us2.make.com"
+  }
+}
