@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import { createLogger } from '../lib/logger';
 import { createVisionMultiSpineService } from '../services/vision-multi-spine.service';
 import { createPhotoStorageService, PhotoStorageService } from '../services/photo-storage.service';
+import { createMakeWebhookService } from '../services/make-webhook.service';
 import type { DetectedItem } from '../services/photo-storage.service';
 
 type Bindings = {
@@ -163,6 +164,24 @@ photosRouter.post('/analyze', async (c) => {
         processingTime
       });
 
+      // Step 6: Envoyer automatiquement à Make.com (si activé)
+      let makeWebhookResults = null;
+      if (options.sendToMake !== false && c.env.MAKE_WEBHOOK_URL) {
+        logger.info('Sending items to Make.com webhook', { count: result.items.length });
+        
+        const makeService = createMakeWebhookService(
+          c.env.MAKE_WEBHOOK_URL,
+          c.env.MAKE_API_KEY
+        );
+        
+        makeWebhookResults = await makeService.sendBatch(
+          result.items as any,
+          imageUrl
+        );
+        
+        logger.info('Make.com webhook batch sent', makeWebhookResults);
+      }
+
       return c.json({
         success: true,
         photo_id: photoId,
@@ -171,7 +190,12 @@ photosRouter.post('/analyze', async (c) => {
         cached: false,
         processing_time_ms: processingTime,
         request_id: requestId,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        make_webhook: makeWebhookResults ? {
+          sent: makeWebhookResults.sent,
+          failed: makeWebhookResults.failed,
+          success: makeWebhookResults.success
+        } : null
       });
 
     } catch (analysisError: any) {

@@ -1,33 +1,15 @@
-# ValueCollection - Variables d'Environnement de Développement
-# Copiez ce fichier vers .dev.vars et remplissez avec vos vraies clés API
-
-# Environnement
-ENVIRONMENT=development
-
-# OpenAI GPT-4o Vision (Pour l'analyse de photos de livres)
-# Obtenir ici: https://platform.openai.com/api-keys
+# OpenAI API Key (Required for book detection)
 OPENAI_API_KEY=sk-proj-your-key-here
 
-# Anthropic Claude (Pour l'extraction d'entités NER)
-# Obtenir ici: https://console.anthropic.com/
+# Anthropic API Key (Optional, for Claude)
 ANTHROPIC_API_KEY=sk-ant-your-key-here
 
-# Google Gemini (Pour la recherche de prix)
-# Obtenir ici: https://makersuite.google.com/app/apikey
+# Google Gemini API Key (Optional)
 GEMINI_API_KEY=your-gemini-key-here
 
-# eBay API (Pour les prix de marché)
-# Obtenir ici: https://developer.ebay.com/
-EBAY_CLIENT_ID=your-ebay-client-id
-EBAY_CLIENT_SECRET=your-ebay-client-secret
+# Make.com Webhook Configuration
+MAKE_WEBHOOK_URL=https://hook.us2.make.com/c13wdyjwsqtrcfablgyb2baiow108go1
+MAKE_API_KEY=mk-value-collector-2025
 
-# Google Books API (Pour les métadonnées de livres)
-# Obtenir ici: https://console.cloud.google.com/
-GOOGLE_BOOKS_API_KEY=your-google-books-key
-
-# Discogs API (Pour les prix de musique/livres)
-# Obtenir ici: https://www.discogs.com/settings/developers
-DISCOGS_API_KEY=your-discogs-key
-
-# Note: Ne JAMAIS commiter .dev.vars dans Git !
-# Le fichier .dev.vars est déjà dans .gitignore
+# GenSpark Webhook (Legacy, optional)
+GENSPARK_WEBHOOK_URL=https://hook.us2.make.com/c13wdyjwsqtrcfablgyb2baiow108go1
