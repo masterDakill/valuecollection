@@ -164,7 +164,10 @@ INSTRUCTIONS SPÉCIFIQUES:
       
       return {
         ...frameAnalysis,
-        format: 'video_content'
+        extracted_data: {
+          ...frameAnalysis.extracted_data,
+          format: 'video_content'
+        }
       };
 
     } catch (error) {

@@ -11,7 +11,13 @@ const TEST_ORIGINS = new Set([
 ]);
 
 const dispatchToApp = (request: Request) => {
-  return app.fetch(request, { API_KEY: "test-key" } as any, {});
+  // Mock ExecutionContext for testing
+  const mockExecutionContext = {
+    waitUntil: () => {},
+    passThroughOnException: () => {},
+  } as ExecutionContext;
+  
+  return app.fetch(request, { API_KEY: "test-key" } as any, mockExecutionContext);
 };
 
 globalThis.fetch = async (input: any, init?: RequestInit) => {
