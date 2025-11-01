@@ -1,0 +1,47 @@
+🚀 PROMPT GENSPARK AI DEVELOPER - ValueCollection
+
+Salut! Je développe ValueCollection, une app d'inventaire de livres avec analyse IA.
+
+📂 REPO: https://github.com/masterDakill/valuecollection
+📘 LIRE EN PREMIER: README_DEVELOPPEMENT.md et PROMPT_GENSPARK.md dans le repo
+
+🎯 OBJECTIF: Optimiser et améliorer l'application existante
+
+✅ CE QUI FONCTIONNE:
+- Analyse photos HEIC/JPEG avec GPT-4o Vision (5-10 livres/photo)
+- Base de données D1 avec 7 livres
+- API REST (Hono)
+- Export Excel/CSV
+- Scripts automation (.sh)
+- Serveur: http://127.0.0.1:3000
+
+⚠️ PROBLÈMES À RÉSOUDRE:
+1. Interface web basique (besoin React moderne)
+2. Limite upload 1MB (besoin solution pour photos > 1MB)
+3. Pas d'enrichissement auto (ISBN, covers, prix)
+4. Performance à améliorer
+5. Pas de monitoring dashboard
+
+🏗️ STACK ACTUEL:
+- Backend: Hono + Cloudflare Workers
+- DB: Cloudflare D1 (SQLite)
+- IA: OpenAI GPT-4o, Claude, Gemini
+- Build: Vite
+- APIs: eBay, Google Books, Discogs
+
+🎯 PRIORITÉS:
+1. 🥇 Interface React moderne (drag & drop, dashboard, liste livres)
+2. 🥈 Résoudre limite upload photos
+3. 🥈 Pipeline enrichissement automatique
+4. 🥉 Optimisations performance
+5. 🥉 Dashboard monitoring
+
+📂 COMMANDES:
+npm install
+npm run dev:d1        # Serveur dev
+npm run db:export     # Export Excel
+
+📖 TOUT EST DOCUMENTÉ dans le repo!
+Lis PROMPT_GENSPARK.md pour détails complets.
+
+Prêt à optimiser ensemble! 🚀
