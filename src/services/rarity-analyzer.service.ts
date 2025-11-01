@@ -55,13 +55,23 @@ export class RarityAnalyzerService {
     try {
       this.logger.info('Analyzing rarity with AI', { title: book.title });
 
-      const systemPrompt = `Tu es un expert en livres rares et collections. Tu analyses la rareté et la valeur des livres en te basant sur:
-- L'année de publication et l'édition
-- La disponibilité sur le marché
-- Les prix actuels
-- Les facteurs historiques et culturels
-- La demande des collectionneurs
-- Les caractéristiques spéciales (édition limitée, signée, etc.)
+      const systemPrompt = `Tu es un estimateur de valeur de livres pour la revente (eBay/Marketplace).
+Objectif : filtrer rapidement et approfondir uniquement les ouvrages qui ont un potentiel de valeur significatif.
+
+Règles de décision:
+1. Arrêt précoce (STOP_EARLY)
+   - Si probabilité < 5% d'être > 60$ CAD, arrête sans demander d'info supplémentaire.
+   - Indices faible valeur: romans de poche courants, clubs de lecture, rééditions modernes, manuels scolaires, encyclopédies, état acceptable, tirages massifs.
+
+2. Signaux "Potentiel élevé":
+   - "First Edition", "First Printing", number line complète (10 9 8 7 6 5 4 3 2 1)
+   - Signature/dédicace, tirages numérotés/limités, presses rares
+   - Avant 1950 en bel état / avec jaquette / illustrateurs célèbres / BD rare / photobooks
+   - Universitaires épuisés à forte demande (médecine, ingénierie, informatique)
+
+3. Estimation:
+   - Fourchette CAD, confiance, raisons détaillées
+   - Focus sur marché canadien/québécois
 
 Tu réponds TOUJOURS en JSON valide, sans texte avant ou après.`;
 
@@ -97,9 +107,9 @@ Tu réponds TOUJOURS en JSON valide, sans texte avant ou après.`;
    * Construit le prompt pour l'IA
    */
   private buildAnalysisPrompt(book: BookData, marketData: MarketData): string {
-    return `Analyse la rareté de ce livre en tant qu'expert collectionneur:
+    return `Évalue ce livre pour revente (eBay/Marketplace Canada):
 
-📚 INFORMATIONS DU LIVRE:
+📚 INFORMATIONS:
 Titre: ${book.title}
 Auteur: ${book.author || 'Inconnu'}
 Éditeur: ${book.publisher || 'Inconnu'}
@@ -107,17 +117,34 @@ Année: ${book.year || 'Inconnue'}
 ISBN-13: ${book.isbn13 || 'Non disponible'}
 ISBN-10: ${book.isbn || 'Non disponible'}
 Édition: ${book.edition || 'Standard'}
-État: ${book.condition || 'Non spécifié'}
+État: ${book.condition || 'Bon'}
 
-📊 DONNÉES DE MARCHÉ:
+📊 MARCHÉ ACTUEL:
 Exemplaires en vente: ${marketData.totalListings}
-Prix moyen: ${marketData.avgPrice.toFixed(2)} CAD$
-Fourchette de prix: ${marketData.minPrice.toFixed(2)} - ${marketData.maxPrice.toFixed(2)} CAD$
-Ventes récentes (30 jours): ${marketData.recentSales}
+Prix moyen observé: ${marketData.avgPrice.toFixed(2)} CAD$
+Fourchette: ${marketData.minPrice.toFixed(2)} - ${marketData.maxPrice.toFixed(2)} CAD$
+Ventes récentes (30j): ${marketData.recentSales}
 Prix par état: ${JSON.stringify(marketData.pricesByCondition, null, 2)}
 
-📋 ANALYSE DEMANDÉE:
-Évalue ce livre selon les critères suivants et retourne un JSON avec cette structure EXACTE:
+🎯 CRITÈRES PREMIUM À VÉRIFIER:
+- First Edition / First Printing (augmente +100-300%)
+- Signature/dédicace auteur connu (+200-500%)
+- Tirage limité numéroté (+50-1000%)
+- Jaquette originale présente (+50-200% si avant 1970)
+- État exceptionnel vs courant
+- Photobook/art book épuisé
+- Auteur culte (ex: Lovecraft, Gibson, King 1res éditions)
+- BD/Comics première édition originale
+- Universitaire épuisé forte demande
+
+⚠️ RED FLAGS (valeur faible):
+- Club de lecture (Book Club Edition)
+- Réimpression moderne
+- Poche grand tirage
+- Encyclopédies/manuels scolaires récents
+- État acceptable/pauvre sans rareté
+
+📋 RETOURNE CE JSON EXACT:
 
 {
   "rarityScore": <nombre 1-10>,

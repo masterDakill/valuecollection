@@ -4,6 +4,7 @@ import { MultiExpertAISystem } from './ai-experts'
 import { photoBooksRouter } from './routes/photo-books';
 import { photosRouter } from './routes/photos';
 import { itemsRouter } from './routes/items';
+import { monitoringRouter } from './routes/monitoring';
 import booksHtml from '../public/books.html?raw';
 // Types pour les bindings Cloudflare
 type Bindings = {
@@ -38,6 +39,7 @@ app.get('/', async (c) => {
     <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js" onerror="console.error('Failed to load heic2any library')"></script>
     <style>
         .item-card {
             transition: all 0.2s ease;
@@ -189,14 +191,14 @@ app.get('/', async (c) => {
                             <i class="fas fa-upload mr-2"></i>
                             Choisir Photo/Vidéo
                         </button>
-                        <input 
-                            type="file" 
-                            id="mediaInput" 
-                            accept="image/*,video/*" 
+                        <input
+                            type="file"
+                            id="mediaInput"
+                            accept="image/*,.heic,.heif,video/*"
                             class="hidden"
                         >
                         <span class="text-sm text-purple-600">
-                            JPG, PNG, WebP, MP4, MOV • Max 10MB
+                            JPG, PNG, WebP, HEIC, MP4, MOV • Max 10MB
                         </span>
                     </div>
                     <div id="mediaPreview" class="mt-3 hidden">
@@ -1635,8 +1637,61 @@ class CollectionEvaluator {
       return;
     }
 
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime', 'video/x-msvideo'];
-    if (!validTypes.includes(file.type)) {
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'video/mp4', 'video/quicktime', 'video/x-msvideo'];
+
+    // Support for HEIC/HEIF files (iPhone format)
+    if (file.type === 'image/heic' || file.type === 'image/heif' || file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')) {
+      // Check if heic2any is loaded
+      if (typeof heic2any === 'undefined') {
+        this.showNotification('❌ Bibliothèque de conversion HEIC non chargée. Rechargez la page.', 'error');
+        console.error('heic2any library not loaded');
+        return;
+      }
+
+      this.showNotification('🔄 Conversion HEIC en cours... (peut prendre 5-10 secondes)', 'info');
+      try {
+        console.log('Starting HEIC conversion for file:', file.name, 'Size:', file.size, 'Type:', file.type);
+
+        // Convert HEIC to JPEG using heic2any library
+        let convertedBlob = await heic2any({
+          blob: file,
+          toType: 'image/jpeg',
+          quality: 0.8  // Reduced quality for better compatibility
+        });
+
+        console.log('HEIC conversion completed, result type:', typeof convertedBlob, 'Is array:', Array.isArray(convertedBlob));
+
+        // heic2any can return an array of blobs, handle both cases
+        if (Array.isArray(convertedBlob)) {
+          console.log('Multiple blobs returned, using first one');
+          convertedBlob = convertedBlob[0];
+        }
+
+        // Create new File object from converted blob
+        file = new File([convertedBlob], file.name.replace(/\.heic$/i, '.jpg').replace(/\.heif$/i, '.jpg'), {
+          type: 'image/jpeg',
+          lastModified: Date.now()
+        });
+
+        this.showNotification('✅ HEIC converti en JPEG avec succès!', 'success');
+        console.log('HEIC converted successfully. New file:', file.name, 'Size:', file.size, 'bytes');
+      } catch (error) {
+        // Detailed error logging
+        console.error('=== HEIC Conversion Error ===');
+        console.error('Error object:', error);
+        console.error('Error type:', typeof error);
+        console.error('Error message:', error?.message);
+        console.error('Error code:', error?.code);
+        console.error('Error name:', error?.name);
+        console.error('Full error:', JSON.stringify(error, null, 2));
+
+        const errorMsg = error?.message || error?.code || error?.name || 'Erreur inconnue';
+        this.showNotification(\`❌ Conversion HEIC échouée: \${errorMsg}. Solution: Utilisez le script ./convert-heic.sh ou un convertisseur en ligne.\`, 'error');
+        return;
+      }
+    }
+
+    if (!validTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.heic') && !file.name.toLowerCase().endsWith('.heif')) {
       this.showNotification('Type de fichier non supporté', 'warning');
       return;
     }
@@ -2959,46 +3014,8 @@ app.get('/api/stats', async (c) => {
   }
 })
 
-// API: Lister les items
-app.get('/api/items', async (c) => {
-  const { DB } = c.env;
-
-  try {
-    // Paramètres de pagination
-    const page = parseInt(c.req.query('page') || '1');
-    const per_page = parseInt(c.req.query('per_page') || '20');
-    const offset = (page - 1) * per_page;
-
-    // Compter le total
-    const countResult = await DB.prepare('SELECT COUNT(*) as total FROM collection_items').first();
-    const total = countResult.total || 0;
-
-    // Récupérer les items
-    const items = await DB.prepare(`
-      SELECT id, title, description, category, primary_image_url, processing_status, created_at
-      FROM collection_items
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `).bind(per_page, offset).all();
-
-    return c.json({
-      success: true,
-      items: items.results || [],
-      pagination: {
-        page,
-        per_page,
-        total,
-        pages: Math.ceil(total / per_page)
-      }
-    });
-  } catch (error: any) {
-    console.error('❌ Erreur listing items:', error);
-    return c.json({
-      success: false,
-      error: error.message
-    }, 500);
-  }
-})
+// API: Lister les items - MOVED TO itemsRouter
+// See src/routes/items.ts for the full implementation
 
 // API: Import d'un item depuis CSV
 app.post('/api/import-item', async (c) => {
@@ -3591,6 +3608,7 @@ app.get('/test-api', (c) => {
 
 app.route('/api/photos', photosRouter);
 app.route('/api/items', itemsRouter);
+app.route('/api/monitoring', monitoringRouter);
 
 // ============================================================================
 // BOOKS PAGE

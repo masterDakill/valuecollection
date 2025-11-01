@@ -16,6 +16,7 @@ type Bindings = {
   OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
   GEMINI_API_KEY?: string;
+  EBAY_CLIENT_ID?: string;
 };
 
 export const itemsRouter = new Hono<{ Bindings: Bindings }>();
@@ -338,12 +339,16 @@ itemsRouter.post('/:id/evaluate', async (c) => {
       }, 400);
     }
 
-    // 1. Prix multi-sources
+    // 1. Prix multi-sources (Gemini en priorité!)
     logger.info('Fetching prices from multiple sources');
-    const priceService = createPriceAggregatorService();
+    const priceService = createPriceAggregatorService(
+      c.env.EBAY_CLIENT_ID,
+      c.env.GEMINI_API_KEY  // Passer Gemini pour recherche Google
+    );
     const prices = await priceService.aggregatePrices(
       book.isbn_13 as string || '',
-      book.title as string
+      book.title as string,
+      book.artist_author as string | undefined
     );
 
     // 2. Analyse rareté IA avec rotation automatique entre LLMs
