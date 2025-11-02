@@ -105,6 +105,50 @@ adsPublishRouter.post('/ebay/exchange-token', async (c) => {
 });
 
 /**
+ * POST /api/ads-publish/ebay/set-user-token
+ * Directly set a user token (from eBay Developer Portal)
+ */
+adsPublishRouter.post('/ebay/set-user-token', async (c) => {
+  const logger = createLogger(crypto.randomUUID());
+  
+  try {
+    const { token, expiresIn } = await c.req.json();
+    
+    if (!token) {
+      return c.json({
+        success: false,
+        error: { code: 'INVALID_INPUT', message: 'Token required' }
+      }, 400);
+    }
+    
+    // Store token (default expires in 2 hours = 7200 seconds)
+    const userId = 'default';
+    const expiresInMs = (expiresIn || 7200) * 1000;
+    
+    userTokens.set(userId, {
+      access_token: token,
+      refresh_token: '',
+      expires_at: Date.now() + expiresInMs
+    });
+    
+    logger.info('User token set manually', { userId, expiresInMs });
+    
+    return c.json({
+      success: true,
+      message: 'eBay User Token configured successfully',
+      expiresAt: new Date(Date.now() + expiresInMs).toISOString()
+    });
+    
+  } catch (error: any) {
+    logger.error('Failed to set user token', { error: error.message });
+    return c.json({
+      success: false,
+      error: { code: 'SET_TOKEN_ERROR', message: error.message }
+    }, 500);
+  }
+});
+
+/**
  * GET /api/ads-publish/ebay/token-status
  * Check if user has valid eBay token
  */
