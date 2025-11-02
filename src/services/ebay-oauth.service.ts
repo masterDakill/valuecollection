@@ -253,6 +253,21 @@ export class EbayOAuthService {
   ): Promise<{ listingId: string; listingUrl: string }> {
     
     // Step 1: Create inventory item
+    // eBay condition codes: NEW, LIKE_NEW, USED_EXCELLENT, USED_VERY_GOOD, USED_GOOD, USED_ACCEPTABLE, FOR_PARTS_OR_NOT_WORKING
+    const ebayConditionMap: Record<string, string> = {
+      'NEW': 'NEW',
+      'LIKE_NEW': 'LIKE_NEW',
+      'USED': 'USED_EXCELLENT',
+      'GOOD': 'USED_GOOD',
+      'EXCELLENT': 'USED_EXCELLENT',
+      'VERY_GOOD': 'USED_VERY_GOOD',
+      'ACCEPTABLE': 'USED_ACCEPTABLE',
+      'FOR_PARTS': 'FOR_PARTS_OR_NOT_WORKING'
+    };
+    
+    const normalizedCondition = itemData.condition.toUpperCase().replace(/[-\s]/g, '_');
+    const ebayCondition = ebayConditionMap[normalizedCondition] || 'USED_GOOD';
+    
     const inventoryItemData = {
       product: {
         title: itemData.title,
@@ -260,7 +275,7 @@ export class EbayOAuthService {
         imageUrls: itemData.imageUrls || [],
         aspects: {}
       },
-      condition: itemData.condition.toUpperCase(),
+      condition: ebayCondition,
       availability: {
         shipToLocationAvailability: {
           quantity: itemData.quantity
