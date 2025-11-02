@@ -8,6 +8,7 @@ import { monitoringRouter } from './routes/monitoring';
 import exportRoutes from './routes/export';
 import { adsRouter } from './routes/ads';
 import { adsPublishRouter } from './routes/ads-publish';
+import { collectionsRouter } from './routes/collections';
 import booksHtml from '../public/books.html?raw';
 // Types pour les bindings Cloudflare
 type Bindings = {
@@ -4260,6 +4261,7 @@ app.get('/test-api', (c) => {
 
 app.route('/api/photos', photosRouter);
 app.route('/api/items', itemsRouter);
+app.route('/api/collections', collectionsRouter);
 app.route('/api/monitoring', monitoringRouter);
 app.route('/api/export', exportRoutes);
 app.route('/api/ads', adsRouter);
