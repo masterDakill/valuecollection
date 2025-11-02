@@ -8,6 +8,7 @@ import { monitoringRouter } from './routes/monitoring';
 import exportRoutes from './routes/export';
 import { adsRouter } from './routes/ads';
 import { adsPublishRouter } from './routes/ads-publish';
+import { evaluateRoutes } from './routes/evaluate';
 import booksHtml from '../public/books.html?raw';
 // Types pour les bindings Cloudflare
 type Bindings = {
@@ -26,7 +27,8 @@ const app = new Hono<{ Bindings: Bindings }>()
 // Middleware CORS
 app.use('/api/*', cors())
 
-
+// Mount evaluation routes with market prices FIRST (before old routes)
+app.route('/api', evaluateRoutes);
 
 // Route principale avec TOUTES les fonctionnalités restaurées
 app.get('/', async (c) => {
@@ -3713,8 +3715,8 @@ app.post('/api/import-item', async (c) => {
   }
 })
 
-// API: Évaluation intelligente avec système multi-expert IA
-app.post('/api/smart-evaluate', async (c) => {
+// API: Évaluation intelligente avec système multi-expert IA (OLD - remplacé par /routes/evaluate.ts)
+app.post('/api/smart-evaluate-old', async (c) => {
   const { env } = c;
   
   try {
@@ -3792,7 +3794,7 @@ app.post('/api/smart-evaluate', async (c) => {
 })
 
 // API: Analyse avancée multi-expert (endpoint dédié)
-app.post('/api/advanced-analysis', async (c) => {
+app.post('/api/advanced-analysis-old', async (c) => {
   const { env } = c;
   
   try {
