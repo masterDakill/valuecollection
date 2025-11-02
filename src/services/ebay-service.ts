@@ -47,31 +47,55 @@ export class EbayService {
 
   // Recherche d'items similaires vendus
   async searchSoldListings(item: CollectionItem): Promise<RecentSale[]> {
-    const token = await this.getAccessToken();
-    const searchTerms = this.buildSearchTerms(item);
-    
-    const params = new URLSearchParams({
-      q: searchTerms,
-      limit: '50',
-      filter: 'conditionIds:{3000|4000|5000},deliveryCountry:CA,soldItemsOnly:true',
-      sort: 'endTime', // Plus récentes en premier
-      aspect_filter: 'categoryId:213' // Trading cards si applicable
-    });
-
     try {
-      const response = await fetch(
+      const token = await this.getAccessToken();
+      const searchTerms = this.buildSearchTerms(item);
+      
+      // Try with soldItemsOnly filter first
+      let params = new URLSearchParams({
+        q: searchTerms,
+        limit: '50',
+        filter: 'conditionIds:{3000|4000|5000},deliveryCountry:CA,soldItemsOnly:true',
+        sort: 'endTime'
+      });
+
+      let response = await fetch(
         `${this.baseUrl}/buy/browse/v1/item_summary/search?${params}`, 
         {
           headers: {
             'Authorization': `Bearer ${token}`,
-            'X-EBAY-C-MARKETPLACE-ID': 'EBAY_CA', // Marché canadien
+            'X-EBAY-C-MARKETPLACE-ID': 'EBAY_CA',
             'X-EBAY-C-ENDUSERCTX': 'contextualLocation=country%3DCA'
           }
         }
       );
 
+      // If soldItemsOnly fails (requires advanced permissions), try without it
+      if (!response.ok && response.status === 403) {
+        console.warn('eBay soldItemsOnly requires advanced permissions, falling back to active listings');
+        params = new URLSearchParams({
+          q: searchTerms,
+          limit: '50',
+          filter: 'conditionIds:{3000|4000|5000},deliveryCountry:CA',
+          sort: 'price'
+        });
+
+        response = await fetch(
+          `${this.baseUrl}/buy/browse/v1/item_summary/search?${params}`, 
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'X-EBAY-C-MARKETPLACE-ID': 'EBAY_CA',
+              'X-EBAY-C-ENDUSERCTX': 'contextualLocation=country%3DCA'
+            }
+          }
+        );
+      }
+
       if (!response.ok) {
-        throw new Error(`eBay API error: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`eBay API error: ${response.status} - ${errorText}`);
+        return [];
       }
 
       const data = await response.json();
