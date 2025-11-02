@@ -42,6 +42,16 @@ app.get('/', async (c) => {
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js" onerror="console.error('Failed to load heic2any library')"></script>
+    <script>
+      // Vérifier que heic2any est chargé après le chargement de la page
+      window.addEventListener('load', function() {
+        if (typeof heic2any === 'undefined') {
+          console.error('❌ heic2any library failed to load. HEIC conversion will not work.');
+        } else {
+          console.log('✅ heic2any library loaded successfully');
+        }
+      });
+    </script>
     <style>
         .item-card {
             transition: all 0.2s ease;
@@ -1688,7 +1698,22 @@ class CollectionEvaluator {
         console.error('Full error:', JSON.stringify(error, null, 2));
 
         const errorMsg = error?.message || error?.code || error?.name || 'Erreur inconnue';
-        this.showNotification(\`❌ Conversion HEIC échouée: \${errorMsg}. Solution: Utilisez le script ./convert-heic.sh ou un convertisseur en ligne.\`, 'error');
+        
+        // Message d'erreur plus clair pour l'utilisateur
+        let userMessage = '❌ Conversion HEIC échouée: ' + errorMsg;
+        if (errorMsg.includes('fetch') || errorMsg.includes('network')) {
+          userMessage = '❌ Impossible de charger la bibliothèque de conversion HEIC. Vérifiez votre connexion Internet.';
+        } else if (errorMsg.includes('memory') || errorMsg.includes('size')) {
+          userMessage = '❌ Fichier HEIC trop volumineux. Essayez avec un fichier plus petit ou convertissez-le en JPEG avant de l\\'uploader.';
+        }
+        
+        this.showNotification(userMessage, 'error');
+        
+        // Proposer une alternative
+        setTimeout(() => {
+          this.showNotification('💡 Alternative: Convertissez votre HEIC en JPEG sur https://heictojpg.com avant de l\\'uploader', 'info');
+        }, 2000);
+        
         return;
       }
     }
@@ -2314,7 +2339,94 @@ class CollectionEvaluator {
       // Recharger les photos et les livres pour la galerie
       this.loadPhotos();
       this.loadBooks();
+    } else if (pageName === 'Annonce') {
+      // Charger les livres pour le formulaire d'annonce
+      this.loadBooksForAnnonce();
     }
+  }
+
+  async loadBooksForAnnonce() {
+    try {
+      const response = await fetch('/api/items?per_page=100&category=books');
+      const data = await response.json();
+      
+      if (data.success && data.items) {
+        const select = document.getElementById('annonceSelectLivre');
+        if (!select) return;
+        
+        // Vider les options existantes (garder la première)
+        select.innerHTML = '<option value="">Choisir dans votre collection...</option>';
+        
+        // Ajouter les livres
+        data.items.forEach(item => {
+          const option = document.createElement('option');
+          option.value = item.id;
+          const title = item.title || 'Sans titre';
+          const author = item.artist_author ? ' - ' + item.artist_author : '';
+          const price = item.estimated_value ? ' (' + item.estimated_value + ' CAD)' : '';
+          option.textContent = title + author + price;
+          select.appendChild(option);
+        });
+        
+        console.log('Livres chargés pour annonce:', data.items.length);
+        
+        // Écouter les changements de sélection
+        select.addEventListener('change', (e) => this.onBookSelectedForAnnonce(e.target.value));
+      }
+    } catch (error) {
+      console.error('Erreur chargement livres pour annonce:', error);
+      this.showNotification('Erreur lors du chargement des livres', 'error');
+    }
+  }
+
+  onBookSelectedForAnnonce(bookId) {
+    if (!bookId) return;
+    
+    // Charger les détails du livre et pré-remplir le formulaire
+    fetch('/api/items?per_page=100')
+      .then(res => res.json())
+      .then(data => {
+        const book = data.items.find(item => item.id == bookId);
+        if (book) {
+          // Pré-remplir le titre
+          const titleInput = document.getElementById('annonceTitre');
+          if (titleInput) {
+            titleInput.value = book.title || '';
+          }
+          
+          // Pré-remplir la description
+          const descInput = document.getElementById('annonceDescription');
+          if (descInput) {
+            let desc = book.title || '';
+            if (book.artist_author) desc += '\\n\\nAuteur: ' + book.artist_author;
+            if (book.publisher_label) desc += '\\nÉditeur: ' + book.publisher_label;
+            if (book.year) desc += '\\nAnnée: ' + book.year;
+            if (book.isbn || book.isbn_13) desc += '\\nISBN: ' + (book.isbn_13 || book.isbn);
+            if (book.description) desc += '\\n\\n' + book.description;
+            descInput.value = desc;
+          }
+          
+          // Pré-remplir le prix
+          const priceInput = document.getElementById('annoncePrix');
+          const prixSuggere = document.getElementById('prixSuggere');
+          if (book.estimated_value && book.estimated_value > 0) {
+            const suggestedPrice = Math.round(book.estimated_value * 1.1 * 100) / 100; // +10%
+            if (prixSuggere) {
+              prixSuggere.textContent = suggestedPrice.toFixed(2) + ' CAD (valeur + 10%)';
+            }
+            if (priceInput) {
+              priceInput.value = suggestedPrice.toFixed(2);
+            }
+          } else {
+            if (prixSuggere) prixSuggere.textContent = 'Non estimé';
+          }
+          
+          console.log('Livre sélectionné:', book.title);
+        }
+      })
+      .catch(error => {
+        console.error('Erreur chargement détails livre:', error);
+      });
   }
 
   async loadPhotos() {
