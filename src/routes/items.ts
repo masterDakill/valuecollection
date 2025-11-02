@@ -133,6 +133,40 @@ itemsRouter.post('/:id/enrich', async (c) => {
       }, 404);
     }
 
+    // Estimate a reasonable price based on book data
+    // TODO: Replace with actual price lookup API (eBay, Amazon, etc.)
+    let estimatedPrice = item.estimated_value as number || 0;
+    
+    if (estimatedPrice === 0) {
+      // Simple heuristic: base price on age and category
+      const currentYear = new Date().getFullYear();
+      const bookYear = enrichedData.publishedDate ? 
+        parseInt(enrichedData.publishedDate.substring(0, 4)) : currentYear;
+      const age = currentYear - bookYear;
+      
+      // Base price by category/type
+      if (enrichedData.categories?.some(cat => 
+        cat.toLowerCase().includes('rare') || 
+        cat.toLowerCase().includes('collector') ||
+        cat.toLowerCase().includes('first edition')
+      )) {
+        estimatedPrice = Math.max(50, 200 - (age * 2)); // Rare books
+      } else if (age > 50) {
+        estimatedPrice = Math.max(20, 100 - age); // Older books
+      } else if (age > 20) {
+        estimatedPrice = Math.max(15, 50 - age); // Vintage books
+      } else {
+        estimatedPrice = Math.max(10, 30 - age); // Modern books
+      }
+      
+      logger.info('Estimated price calculated', { 
+        itemId, 
+        estimatedPrice, 
+        bookYear,
+        age 
+      });
+    }
+
     // Update the item with enriched data (convert undefined to null for D1)
     await db.prepare(`
       UPDATE collection_items
@@ -142,7 +176,8 @@ itemsRouter.post('/:id/enrich', async (c) => {
         year = COALESCE(year, ?),
         isbn = COALESCE(isbn, ?),
         isbn_13 = COALESCE(isbn_13, ?),
-        primary_image_url = COALESCE(primary_image_url, ?)
+        primary_image_url = COALESCE(primary_image_url, ?),
+        estimated_value = ?
       WHERE id = ?
     `).bind(
       enrichedData.authors?.join(', ') || null,
@@ -151,6 +186,7 @@ itemsRouter.post('/:id/enrich', async (c) => {
       enrichedData.isbn10 || null,
       enrichedData.isbn13 || null,
       enrichedData.imageUrl || null,
+      estimatedPrice,
       itemId
     ).run();
 
@@ -192,6 +228,103 @@ itemsRouter.post('/:id/enrich', async (c) => {
       success: false,
       error: {
         code: 'ENRICHMENT_ERROR',
+        message: error.message
+      }
+    }, 500);
+  }
+});
+
+/**
+ * POST /api/items/:id/estimate-price
+ * Estimate price for an item even without full enrichment
+ */
+itemsRouter.post('/:id/estimate-price', async (c) => {
+  const requestId = crypto.randomUUID();
+  const logger = createLogger(requestId);
+
+  try {
+    const itemId = c.req.param('id');
+    const db = c.env.DB;
+
+    logger.info('Estimating price for item', { itemId });
+
+    // Get the item from database
+    const item = await db.prepare(`
+      SELECT * FROM collection_items WHERE id = ?
+    `).bind(itemId).first();
+
+    if (!item) {
+      return c.json({
+        success: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: `Item ${itemId} not found`
+        }
+      }, 404);
+    }
+
+    // Simple price estimation based on available data
+    const currentYear = new Date().getFullYear();
+    const bookYear = item.year ? parseInt(item.year as string) : currentYear - 10;
+    const age = currentYear - bookYear;
+    
+    let estimatedPrice = 0;
+    const category = (item.category as string || '').toLowerCase();
+    const title = (item.title as string || '').toLowerCase();
+    
+    // Price heuristics
+    if (title.includes('art') || title.includes('illustration')) {
+      estimatedPrice = Math.max(30, 80 - (age * 1.5)); // Art books
+    } else if (title.includes('rare') || title.includes('collector') || title.includes('first edition')) {
+      estimatedPrice = Math.max(50, 200 - (age * 2)); // Rare books
+    } else if (age > 50) {
+      estimatedPrice = Math.max(20, 100 - age); // Older books
+    } else if (age > 20) {
+      estimatedPrice = Math.max(15, 50 - age); // Vintage books
+    } else {
+      estimatedPrice = Math.max(10, 30 - age); // Modern books
+    }
+
+    // Update the price
+    await db.prepare(`
+      UPDATE collection_items
+      SET estimated_value = ?
+      WHERE id = ?
+    `).bind(estimatedPrice, itemId).run();
+
+    // Get updated item
+    const updatedItem = await db.prepare(`
+      SELECT * FROM collection_items WHERE id = ?
+    `).bind(itemId).first();
+
+    logger.info('Price estimated successfully', {
+      itemId,
+      estimatedPrice,
+      age
+    });
+
+    return c.json({
+      success: true,
+      item: updatedItem,
+      estimation: {
+        method: 'heuristic',
+        estimated_price: estimatedPrice,
+        factors: {
+          age,
+          bookYear,
+          category
+        }
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error: any) {
+    logger.error('Price estimation failed', { error: error.message });
+
+    return c.json({
+      success: false,
+      error: {
+        code: 'ESTIMATION_ERROR',
         message: error.message
       }
     }, 500);

@@ -139,9 +139,10 @@ export class PhotoStorageService {
             year_made, isbn, isbn_13,
             bbox, detection_confidence, detection_index,
             condition_grade,
+            estimated_value,
             processing_status, ai_analyzed,
             created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
         `).bind(
           collectionId,
           photoId,
@@ -158,6 +159,7 @@ export class PhotoStorageService {
           item.detection_confidence || null,
           item.detection_index !== undefined ? item.detection_index : i,
           item.condition_grade || null,
+          item.estimated_value || 0,
           'completed',
           true
         ).run();
