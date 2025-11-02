@@ -373,12 +373,184 @@ function AdsPanel({ adsState, minValue, setMinValue, onGenerate, onExport }) {
   </div>`;
 }
 
+function CollectionsPanel({ collections, loading, onRefresh, onCreate, onUpdate, onDelete }) {
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState({ name: '', description: '' });
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    if (!formData.name.trim()) return;
+    
+    if (editingId) {
+      onUpdate(editingId, formData.name, formData.description);
+      setEditingId(null);
+    } else {
+      onCreate(formData.name, formData.description);
+    }
+    
+    setFormData({ name: '', description: '' });
+    setShowCreateForm(false);
+  };
+
+  const startEdit = (collection) => {
+    setEditingId(collection.id);
+    setFormData({ name: collection.name, description: collection.description || '' });
+    setShowCreateForm(true);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setFormData({ name: '', description: '' });
+    setShowCreateForm(false);
+  };
+
+  if (loading) {
+    return html`<div className="rounded-lg border border-dashed p-6 text-center text-sm text-slate-500">
+      Chargement des collections…
+    </div>`;
+  }
+
+  return html`<div className="space-y-4">
+    <div className="flex items-center justify-between">
+      <h2 className="text-lg font-semibold text-slate-900">Mes Collections</h2>
+      <div className="flex gap-2">
+        <button 
+          className="rounded-lg border border-slate-200 px-3 py-1 text-sm hover:bg-slate-50" 
+          onClick=${onRefresh}
+        >
+          <i className="fas fa-sync mr-1"></i> Rafraîchir
+        </button>
+        <button 
+          className="rounded-lg bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700" 
+          onClick=${() => setShowCreateForm(!showCreateForm)}
+        >
+          <i className="fas fa-plus mr-1"></i> Nouvelle Collection
+        </button>
+      </div>
+    </div>
+
+    ${showCreateForm
+      ? html`<form 
+          onSubmit=${handleSubmit}
+          className="rounded-lg border bg-slate-50 p-4"
+        >
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">
+            ${editingId ? 'Modifier la Collection' : 'Créer une Collection'}
+          </h3>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Nom *</label>
+              <input
+                type="text"
+                required
+                value=${formData.name}
+                onChange=${(e) => setFormData({ ...formData, name: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                placeholder="Ex: Livres de Science-Fiction"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Description</label>
+              <textarea
+                value=${formData.description}
+                onChange=${(e) => setFormData({ ...formData, description: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                placeholder="Description optionnelle"
+                rows="2"
+              ></textarea>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                ${editingId ? 'Mettre à jour' : 'Créer'}
+              </button>
+              <button
+                type="button"
+                onClick=${cancelEdit}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </form>`
+      : null}
+
+    ${collections.length === 0
+      ? html`<div className="rounded-lg border border-dashed p-6 text-center text-sm text-slate-500">
+          Aucune collection pour le moment. Créez-en une pour organiser vos items !
+        </div>`
+      : html`<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          ${collections.map((collection) =>
+            html`<article key=${collection.id} className="rounded-lg border bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h3 className="text-base font-semibold text-slate-900">${collection.name}</h3>
+                  ${collection.description
+                    ? html`<p className="mt-1 text-sm text-slate-600">${collection.description}</p>`
+                    : null}
+                </div>
+                ${collection.id !== 1
+                  ? html`<div className="flex gap-1">
+                      <button
+                        onClick=${() => startEdit(collection)}
+                        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-blue-600"
+                        title="Modifier"
+                      >
+                        <i className="fas fa-edit text-sm"></i>
+                      </button>
+                      <button
+                        onClick=${() => onDelete(collection.id)}
+                        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600"
+                        title="Supprimer"
+                      >
+                        <i className="fas fa-trash text-sm"></i>
+                      </button>
+                    </div>`
+                  : html`<span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+                      Défaut
+                    </span>`}
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3 border-t pt-3">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-blue-600">${collection.items_count || 0}</p>
+                  <p className="text-xs text-slate-500">Items</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-green-600">${formatCurrency(collection.total_value || 0, 'CAD')}</p>
+                  <p className="text-xs text-slate-500">Valeur totale</p>
+                </div>
+              </div>
+
+              <div className="mt-3 flex gap-2">
+                <a
+                  href="#"
+                  onClick=${(e) => {
+                    e.preventDefault();
+                    window.alert('Vue détaillée à venir dans la prochaine version');
+                  }}
+                  className="flex-1 rounded-lg bg-slate-100 px-3 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-200"
+                >
+                  <i className="fas fa-eye mr-1"></i> Voir les items
+                </a>
+              </div>
+            </article>`
+          )}
+        </div>`}
+  </div>`;
+}
+
 function CollectionApp() {
   const [activeTab, setActiveTab] = useState('analyze');
   const [healthState, setHealthState] = useState({ status: 'loading' });
   const [endpointStatus, setEndpointStatus] = useState({});
   const [photosState, setPhotosState] = useState({ data: [], loading: false, error: null });
   const [itemsState, setItemsState] = useState({ data: [], loading: false, error: null });
+  const [collectionsState, setCollectionsState] = useState({ data: [], loading: false, error: null });
   const [adsState, setAdsState] = useState({ data: [], loading: false, error: null, exporting: false });
   const [analyzeForm, setAnalyzeForm] = useState({
     imageUrl: '',
@@ -398,6 +570,7 @@ function CollectionApp() {
     checkHealth();
     refreshPhotos();
     refreshItems();
+    refreshCollections();
   }, []);
 
   async function checkHealth() {
@@ -456,6 +629,66 @@ function CollectionApp() {
         items: { status: 'error', message: error.message }
       }));
       notifications.push(`Chargement items: ${error.message}`, 'error');
+    }
+  }
+
+  async function refreshCollections() {
+    setCollectionsState((current) => ({ ...current, loading: true, error: null }));
+    try {
+      const data = await fetchJson('/api/collections');
+      const collectionsArray = Array.isArray(data?.collections) ? data.collections : [];
+      setCollectionsState({ data: collectionsArray, loading: false, error: null });
+      setEndpointStatus((current) => ({
+        ...current,
+        collections: { status: 'ok', checkedAt: new Date().toISOString() }
+      }));
+    } catch (error) {
+      setCollectionsState({ data: [], loading: false, error: error.message });
+      setEndpointStatus((current) => ({
+        ...current,
+        collections: { status: 'error', message: error.message }
+      }));
+      notifications.push(`Chargement collections: ${error.message}`, 'error');
+    }
+  }
+
+  async function handleCreateCollection(name, description) {
+    try {
+      await fetchJson('/api/collections', {
+        method: 'POST',
+        body: JSON.stringify({ name, description })
+      });
+      notifications.push('Collection créée avec succès', 'success');
+      refreshCollections();
+    } catch (error) {
+      notifications.push(`Erreur création: ${error.message}`, 'error');
+    }
+  }
+
+  async function handleUpdateCollection(id, name, description) {
+    try {
+      await fetchJson(`/api/collections/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name, description })
+      });
+      notifications.push('Collection mise à jour', 'success');
+      refreshCollections();
+    } catch (error) {
+      notifications.push(`Erreur mise à jour: ${error.message}`, 'error');
+    }
+  }
+
+  async function handleDeleteCollection(id) {
+    if (!confirm('Supprimer cette collection? Les items seront déplacés vers la collection par défaut.')) {
+      return;
+    }
+    try {
+      await fetchJson(`/api/collections/${id}`, { method: 'DELETE' });
+      notifications.push('Collection supprimée', 'success');
+      refreshCollections();
+      refreshItems();
+    } catch (error) {
+      notifications.push(`Erreur suppression: ${error.message}`, 'error');
     }
   }
 
@@ -716,6 +949,7 @@ function CollectionApp() {
           { key: 'analyze', label: 'Analyser' },
           { key: 'photos', label: 'Photos' },
           { key: 'books', label: 'Livres / Items' },
+          { key: 'collections', label: 'Collections' },
           { key: 'ads', label: 'Annonces' }
         ].map((tab) =>
           html`<button
@@ -830,6 +1064,20 @@ function CollectionApp() {
         ? html`<section className="rounded-lg border bg-white p-4 shadow-sm">
             ${itemsState.error ? html`<p className="mb-3 text-sm text-red-600">${itemsState.error}</p>` : null}
             ${html`<${ItemsTable} items=${itemsState.data} loading=${itemsState.loading} onRefresh=${refreshItems} />`}
+          </section>`
+        : null}
+
+      ${activeTab === 'collections'
+        ? html`<section className="rounded-lg border bg-white p-4 shadow-sm">
+            ${collectionsState.error ? html`<p className="mb-3 text-sm text-red-600">${collectionsState.error}</p>` : null}
+            ${html`<${CollectionsPanel}
+              collections=${collectionsState.data}
+              loading=${collectionsState.loading}
+              onRefresh=${refreshCollections}
+              onCreate=${handleCreateCollection}
+              onUpdate=${handleUpdateCollection}
+              onDelete=${handleDeleteCollection}
+            />`}
           </section>`
         : null}
 
