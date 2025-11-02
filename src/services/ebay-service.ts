@@ -8,11 +8,13 @@ export class EbayService {
   private baseUrl: string;
   private accessToken?: string;
   private tokenExpiry?: number;
+  private userToken?: string; // OAuth User Token for enhanced permissions
 
-  constructor(clientId: string, clientSecret: string, sandbox = false) {
+  constructor(clientId: string, clientSecret: string, sandbox = false, userToken?: string) {
     this.clientId = clientId;
     this.clientSecret = clientSecret;
     this.sandbox = sandbox;
+    this.userToken = userToken;
     this.baseUrl = sandbox 
       ? 'https://api.sandbox.ebay.com' 
       : 'https://api.ebay.com';
@@ -20,6 +22,12 @@ export class EbayService {
 
   // Authentification OAuth2
   private async getAccessToken(): Promise<string> {
+    // If we have a User Token, use it (provides more permissions like soldItemsOnly)
+    if (this.userToken) {
+      return this.userToken;
+    }
+
+    // Otherwise fall back to client credentials (limited permissions)
     if (this.accessToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
       return this.accessToken;
     }

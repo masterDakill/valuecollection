@@ -60,9 +60,13 @@ export class MarketPriceService {
       this.ebayService = new EbayService(
         env.EBAY_CLIENT_ID,
         env.EBAY_CLIENT_SECRET,
-        env.EBAY_ENVIRONMENT === 'sandbox'
+        env.EBAY_ENVIRONMENT === 'sandbox',
+        env.EBAY_USER_TOKEN // Pass User Token if available for enhanced permissions
       );
-      this.logger.info('eBay service initialized');
+      this.logger.info('eBay service initialized', {
+        hasUserToken: !!env.EBAY_USER_TOKEN,
+        environment: env.EBAY_ENVIRONMENT
+      });
     } else {
       this.logger.warn('eBay API keys missing - marketplace pricing unavailable');
     }
