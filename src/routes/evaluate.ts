@@ -64,7 +64,14 @@ evaluateRoutes.post(
       // Determine which experts to use
       const enabledExperts = request.options?.expertSources || ['vision', 'claude'];
 
-      // Use cache if enabled
+      // Query experts (always needed for market prices)
+      const analyses = await expertService.queryExperts(expertInput, enabledExperts);
+
+      if (analyses.length === 0) {
+        throw new Error('All expert analyses failed');
+      }
+
+      // Use cache if enabled for smart_analysis only
       const useCache = request.options?.useCache ?? true;
       let smart_analysis;
 
@@ -73,13 +80,6 @@ evaluateRoutes.post(
           'smart_analysis',
           { input: expertInput, experts: enabledExperts },
           async () => {
-            // Query experts
-            const analyses = await expertService.queryExperts(expertInput, enabledExperts);
-
-            if (analyses.length === 0) {
-              throw new Error('All expert analyses failed');
-            }
-
             // Use first expert analysis for smart_analysis format
             const primary = analyses[0];
             return {
@@ -93,12 +93,6 @@ evaluateRoutes.post(
           request.options?.timeoutMs ? request.options.timeoutMs / 1000 : 86400
         );
       } else {
-        const analyses = await expertService.queryExperts(expertInput, enabledExperts);
-
-        if (analyses.length === 0) {
-          throw new Error('All expert analyses failed');
-        }
-
         const primary = analyses[0];
         smart_analysis = {
           category: primary.category,
@@ -117,24 +111,26 @@ evaluateRoutes.post(
       };
 
       // Fetch market prices if available
-      const primaryAnalysis = analyses[0];
+      const primaryAnalysis = analyses && analyses.length > 0 ? analyses[0] : null;
       let marketPrices = null;
       
-      try {
-        marketPrices = await marketPriceService.getMarketPrices(primaryAnalysis);
-        
-        if (marketPrices) {
-          // Update market insights with real data
-          market_insights = marketPrices.market_insights;
+      if (primaryAnalysis) {
+        try {
+          marketPrices = await marketPriceService.getMarketPrices(primaryAnalysis);
           
-          logger.info('Market prices fetched', {
-            estimated_value: marketPrices.estimated_value,
-            sources: marketPrices.sources_used,
-            confidence: marketPrices.confidence
-          });
+          if (marketPrices) {
+            // Update market insights with real data
+            market_insights = marketPrices.market_insights;
+            
+            logger.info('Market prices fetched', {
+              estimated_value: marketPrices.estimated_value,
+              sources: marketPrices.sources_used,
+              confidence: marketPrices.confidence
+            });
+          }
+        } catch (error: any) {
+          logger.warn('Failed to fetch market prices', error);
         }
-      } catch (error: any) {
-        logger.warn('Failed to fetch market prices', error);
       }
 
       // Generate search queries for improvements
