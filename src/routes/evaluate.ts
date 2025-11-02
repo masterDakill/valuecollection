@@ -111,6 +111,26 @@ evaluateRoutes.post(
       };
 
       // Fetch market prices if available
+ feature/market-price-integration
+      const primaryAnalysis = analyses[0];
+      let marketPrices = null;
+      
+      try {
+        marketPrices = await marketPriceService.getMarketPrices(primaryAnalysis);
+        
+        if (marketPrices) {
+          // Update market insights with real data
+          market_insights = marketPrices.market_insights;
+          
+          logger.info('Market prices fetched', {
+            estimated_value: marketPrices.estimated_value,
+            sources: marketPrices.sources_used,
+            confidence: marketPrices.confidence
+          });
+        }
+      } catch (error: any) {
+        logger.warn('Failed to fetch market prices', error);
+
       const primaryAnalysis = analyses && analyses.length > 0 ? analyses[0] : null;
       let marketPrices = null;
       
@@ -131,6 +151,7 @@ evaluateRoutes.post(
         } catch (error: any) {
           logger.warn('Failed to fetch market prices', error);
         }
+ main
       }
 
       // Generate search queries for improvements
