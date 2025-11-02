@@ -872,6 +872,12 @@ class CollectionEvaluator {
     if (enrichAllBooksBtn) {
       enrichAllBooksBtn.addEventListener('click', () => this.enrichAllBooks());
     }
+
+    // Bouton "Générer avec IA" pour les descriptions d'annonces
+    const generateDescriptionBtn = document.getElementById('generateDescription');
+    if (generateDescriptionBtn) {
+      generateDescriptionBtn.addEventListener('click', () => this.generateAIDescription());
+    }
   }
 
   // ===== FONCTIONNALITÉS D'IMPORT AVANCÉES COMPLÈTES =====
@@ -1652,70 +1658,22 @@ class CollectionEvaluator {
     const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'video/mp4', 'video/quicktime', 'video/x-msvideo'];
 
     // Support for HEIC/HEIF files (iPhone format)
+    // NOTE: La conversion HEIC côté client est désactivée car peu fiable
+    // Les utilisateurs doivent convertir en JPEG avant l'upload
     if (file.type === 'image/heic' || file.type === 'image/heif' || file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')) {
-      // Check if heic2any is loaded
-      if (typeof heic2any === 'undefined') {
-        this.showNotification('❌ Bibliothèque de conversion HEIC non chargée. Rechargez la page.', 'error');
-        console.error('heic2any library not loaded');
-        return;
-      }
-
-      this.showNotification('🔄 Conversion HEIC en cours... (peut prendre 5-10 secondes)', 'info');
-      try {
-        console.log('Starting HEIC conversion for file:', file.name, 'Size:', file.size, 'Type:', file.type);
-
-        // Convert HEIC to JPEG using heic2any library
-        let convertedBlob = await heic2any({
-          blob: file,
-          toType: 'image/jpeg',
-          quality: 0.8  // Reduced quality for better compatibility
-        });
-
-        console.log('HEIC conversion completed, result type:', typeof convertedBlob, 'Is array:', Array.isArray(convertedBlob));
-
-        // heic2any can return an array of blobs, handle both cases
-        if (Array.isArray(convertedBlob)) {
-          console.log('Multiple blobs returned, using first one');
-          convertedBlob = convertedBlob[0];
-        }
-
-        // Create new File object from converted blob
-        file = new File([convertedBlob], file.name.replace(/\.heic$/i, '.jpg').replace(/\.heif$/i, '.jpg'), {
-          type: 'image/jpeg',
-          lastModified: Date.now()
-        });
-
-        this.showNotification('✅ HEIC converti en JPEG avec succès!', 'success');
-        console.log('HEIC converted successfully. New file:', file.name, 'Size:', file.size, 'bytes');
-      } catch (error) {
-        // Detailed error logging
-        console.error('=== HEIC Conversion Error ===');
-        console.error('Error object:', error);
-        console.error('Error type:', typeof error);
-        console.error('Error message:', error?.message);
-        console.error('Error code:', error?.code);
-        console.error('Error name:', error?.name);
-        console.error('Full error:', JSON.stringify(error, null, 2));
-
-        const errorMsg = error?.message || error?.code || error?.name || 'Erreur inconnue';
-        
-        // Message d'erreur plus clair pour l'utilisateur
-        let userMessage = '❌ Conversion HEIC échouée: ' + errorMsg;
-        if (errorMsg.includes('fetch') || errorMsg.includes('network')) {
-          userMessage = '❌ Impossible de charger la bibliothèque de conversion HEIC. Vérifiez votre connexion Internet.';
-        } else if (errorMsg.includes('memory') || errorMsg.includes('size')) {
-          userMessage = '❌ Fichier HEIC trop volumineux. Essayez avec un fichier plus petit ou convertissez-le en JPEG avant de l\\'uploader.';
-        }
-        
-        this.showNotification(userMessage, 'error');
-        
-        // Proposer une alternative
-        setTimeout(() => {
-          this.showNotification('💡 Alternative: Convertissez votre HEIC en JPEG sur https://heictojpg.com avant de l\\'uploader', 'info');
-        }, 2000);
-        
-        return;
-      }
+      this.showNotification('❌ Fichiers HEIC non supportés directement', 'error');
+      
+      // Afficher un message explicatif avec solution
+      setTimeout(() => {
+        this.showNotification('💡 Convertissez votre HEIC en JPEG sur votre iPhone: Réglages → Appareil photo → Formats → Compatible', 'info');
+      }, 1000);
+      
+      setTimeout(() => {
+        this.showNotification('🌐 Ou utilisez: https://heictojpg.com (conversion en ligne gratuite)', 'info');
+      }, 3000);
+      
+      console.warn('HEIC file rejected:', file.name);
+      return;
     }
 
     if (!validTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.heic') && !file.name.toLowerCase().endsWith('.heif')) {
@@ -2388,6 +2346,9 @@ class CollectionEvaluator {
       .then(data => {
         const book = data.items.find(item => item.id == bookId);
         if (book) {
+          // Stocker le livre sélectionné pour utilisation ultérieure
+          this.currentSelectedBook = book;
+          
           // Pré-remplir le titre
           const titleInput = document.getElementById('annonceTitre');
           if (titleInput) {
@@ -2427,6 +2388,65 @@ class CollectionEvaluator {
       .catch(error => {
         console.error('Erreur chargement détails livre:', error);
       });
+  }
+
+  async generateAIDescription() {
+    const selectLivre = document.getElementById('annonceSelectLivre');
+    const descInput = document.getElementById('annonceDescription');
+    const generateBtn = document.getElementById('generateDescription');
+    
+    if (!selectLivre || !selectLivre.value) {
+      this.showNotification('⚠️ Sélectionnez d\\'abord un livre', 'warning');
+      return;
+    }
+    
+    if (!descInput) return;
+    
+    // Désactiver le bouton pendant la génération
+    const originalText = generateBtn.innerHTML;
+    generateBtn.disabled = true;
+    generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Génération...';
+    
+    try {
+      const bookId = selectLivre.value;
+      const book = this.currentSelectedBook;
+      
+      if (!book) {
+        this.showNotification('❌ Erreur: livre non trouvé', 'error');
+        return;
+      }
+      
+      this.showNotification('🤖 Génération de la description avec IA...', 'info');
+      
+      // Utiliser l'API ads pour générer une description optimisée
+      const response = await fetch('/api/ads/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemIds: [parseInt(bookId)],
+          platform: 'eBay'
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.ads && data.ads.length > 0) {
+        const ad = data.ads[0];
+        // Utiliser la description générée
+        descInput.value = ad.description;
+        this.showNotification('✅ Description générée avec succès !', 'success');
+      } else {
+        this.showNotification('❌ Erreur de génération: ' + (data.error?.message || 'Erreur inconnue'), 'error');
+      }
+      
+    } catch (error) {
+      console.error('Erreur génération description:', error);
+      this.showNotification('❌ Erreur lors de la génération de la description', 'error');
+    } finally {
+      // Réactiver le bouton
+      generateBtn.disabled = false;
+      generateBtn.innerHTML = originalText;
+    }
   }
 
   async loadPhotos() {
