@@ -7,6 +7,7 @@ import { itemsRouter } from './routes/items';
 import { monitoringRouter } from './routes/monitoring';
 import exportRoutes from './routes/export';
 import { adsRouter } from './routes/ads';
+import { adsPublishRouter } from './routes/ads-publish';
 import booksHtml from '../public/books.html?raw';
 // Types pour les bindings Cloudflare
 type Bindings = {
@@ -107,6 +108,9 @@ app.get('/', async (c) => {
                 </button>
                 <button id="navAnnonce" class="px-4 py-2 rounded-t-lg text-gray-600 hover:bg-gray-100 font-medium">
                     <i class="fas fa-bullhorn mr-2"></i>Créer Annonce
+                </button>
+                <button id="navMesAnnonces" class="px-4 py-2 rounded-t-lg text-gray-600 hover:bg-gray-100 font-medium">
+                    <i class="fas fa-list-alt mr-2"></i>Mes Annonces
                 </button>
                 <button id="navComparables" class="px-4 py-2 rounded-t-lg text-gray-600 hover:bg-gray-100 font-medium">
                     <i class="fas fa-balance-scale mr-2"></i>Comparables
@@ -635,6 +639,61 @@ app.get('/', async (c) => {
     </div>
     <!-- FIN PAGE: COMPARABLES -->
 
+    <!-- ========== PAGE: MES ANNONCES ========== -->
+    <div id="pageMesAnnonces" class="page-content hidden">
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-6 border-b">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-2xl font-bold">
+                        <i class="fas fa-list-alt text-green-600 mr-3"></i>
+                        Mes Annonces Créées
+                    </h2>
+                    <div class="flex space-x-2">
+                        <button id="refreshAnnonces" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            <i class="fas fa-sync-alt mr-2"></i>Actualiser
+                        </button>
+                        <button id="exportAnnoncesCsv" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                            <i class="fas fa-download mr-2"></i>Export CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filtres -->
+            <div class="p-4 bg-gray-50 border-b flex space-x-4">
+                <select id="filterStatus" class="px-3 py-2 border rounded-lg">
+                    <option value="all">Tous les statuts</option>
+                    <option value="draft">Brouillons</option>
+                    <option value="published">Publiées</option>
+                    <option value="archived">Archivées</option>
+                </select>
+                <select id="filterPlatform" class="px-3 py-2 border rounded-lg">
+                    <option value="">Toutes plateformes</option>
+                    <option value="ebay">eBay</option>
+                    <option value="facebook">Facebook</option>
+                    <option value="kijiji">Kijiji</option>
+                    <option value="abebooks">AbeBooks</option>
+                </select>
+            </div>
+
+            <!-- Liste des annonces -->
+            <div id="annoncesListContainer" class="p-6">
+                <div id="annoncesList" class="space-y-4">
+                    <!-- Rempli dynamiquement -->
+                </div>
+                
+                <div id="annoncesEmpty" class="text-center py-12 text-gray-500">
+                    <i class="fas fa-inbox text-6xl mb-4 text-gray-300"></i>
+                    <p class="text-lg mb-2">Aucune annonce créée</p>
+                    <p class="text-sm">Créez votre première annonce pour la voir apparaître ici</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+    <!-- FIN PAGE: MES ANNONCES -->
+
         <!-- Liste des items avec Import Avancé RESTAURÉ (reste dans page Database) -->
         <div class="bg-white rounded-lg shadow">
             <div class="p-6 border-b">
@@ -818,6 +877,7 @@ class CollectionEvaluator {
     const navPhotos = document.getElementById('navPhotos');
     const navRecommendations = document.getElementById('navRecommendations');
     const navAnnonce = document.getElementById('navAnnonce');
+    const navMesAnnonces = document.getElementById('navMesAnnonces');
     const navComparables = document.getElementById('navComparables');
 
     if (navDatabase) {
@@ -831,6 +891,9 @@ class CollectionEvaluator {
     }
     if (navAnnonce) {
       navAnnonce.addEventListener('click', () => this.showPage('Annonce'));
+    }
+    if (navMesAnnonces) {
+      navMesAnnonces.addEventListener('click', () => this.showPage('MesAnnonces'));
     }
     if (navComparables) {
       navComparables.addEventListener('click', () => this.showPage('Comparables'));
@@ -877,6 +940,32 @@ class CollectionEvaluator {
     const generateDescriptionBtn = document.getElementById('generateDescription');
     if (generateDescriptionBtn) {
       generateDescriptionBtn.addEventListener('click', () => this.generateAIDescription());
+    }
+
+    // Formulaire de publication d'annonce
+    const annonceForm = document.getElementById('annonceForm');
+    if (annonceForm) {
+      annonceForm.addEventListener('submit', (e) => this.handlePublishAnnonce(e));
+    }
+
+    // Page "Mes Annonces"
+    const refreshAnnonces = document.getElementById('refreshAnnonces');
+    if (refreshAnnonces) {
+      refreshAnnonces.addEventListener('click', () => this.loadMesAnnonces());
+    }
+
+    const exportAnnoncesCsv = document.getElementById('exportAnnoncesCsv');
+    if (exportAnnoncesCsv) {
+      exportAnnoncesCsv.addEventListener('click', () => this.exportAnnoncesCsv());
+    }
+
+    const filterStatus = document.getElementById('filterStatus');
+    const filterPlatform = document.getElementById('filterPlatform');
+    if (filterStatus) {
+      filterStatus.addEventListener('change', () => this.loadMesAnnonces());
+    }
+    if (filterPlatform) {
+      filterPlatform.addEventListener('change', () => this.loadMesAnnonces());
     }
   }
 
@@ -2300,6 +2389,9 @@ class CollectionEvaluator {
     } else if (pageName === 'Annonce') {
       // Charger les livres pour le formulaire d'annonce
       this.loadBooksForAnnonce();
+    } else if (pageName === 'MesAnnonces') {
+      // Charger les annonces créées
+      this.loadMesAnnonces();
     }
   }
 
@@ -2390,6 +2482,120 @@ class CollectionEvaluator {
       });
   }
 
+  async handlePublishAnnonce(e) {
+    e.preventDefault();
+    
+    const selectLivre = document.getElementById('annonceSelectLivre');
+    const titleInput = document.getElementById('annonceTitre');
+    const descInput = document.getElementById('annonceDescription');
+    const priceInput = document.getElementById('annoncePrix');
+    
+    // Récupérer les plateformes sélectionnées
+    const platformCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+    const platforms = Array.from(platformCheckboxes).map(cb => cb.value);
+    
+    if (!selectLivre || !selectLivre.value) {
+      this.showNotification('⚠️ Sélectionnez un livre', 'warning');
+      return;
+    }
+    
+    if (!titleInput.value || !descInput.value) {
+      this.showNotification('⚠️ Titre et description requis', 'warning');
+      return;
+    }
+    
+    if (platforms.length === 0) {
+      this.showNotification('⚠️ Sélectionnez au moins une plateforme', 'warning');
+      return;
+    }
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Publication...';
+    
+    try {
+      const itemId = parseInt(selectLivre.value);
+      const title = titleInput.value;
+      const description = descInput.value;
+      const price = parseFloat(priceInput.value) || 0;
+      
+      this.showNotification('💾 Sauvegarde de l\\'annonce...', 'info');
+      
+      // Étape 1: Sauvegarder l'annonce dans la base de données
+      const saveResponse = await fetch('/api/ads-publish/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemId,
+          title,
+          description,
+          price,
+          platforms
+        })
+      });
+      
+      const saveData = await saveResponse.json();
+      
+      if (!saveData.success) {
+        throw new Error(saveData.error?.message || 'Erreur de sauvegarde');
+      }
+      
+      this.showNotification('✅ Annonce sauvegardée !', 'success');
+      
+      // Étape 2: Si eBay est sélectionné, publier
+      const ebayAd = saveData.ads.find(ad => ad.platform === 'ebay');
+      if (ebayAd) {
+        this.showNotification('🚀 Publication sur eBay...', 'info');
+        
+        const publishResponse = await fetch('/api/ads-publish/publish-ebay', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            adId: ebayAd.id
+          })
+        });
+        
+        const publishData = await publishResponse.json();
+        
+        if (publishData.success) {
+          this.showNotification('✅ Publié sur eBay ! (simulation)', 'success');
+          
+          // Afficher le lien si disponible
+          if (publishData.ebayListingUrl) {
+            setTimeout(() => {
+              this.showNotification('🔗 Lien: ' + publishData.ebayListingUrl, 'info');
+            }, 1000);
+          }
+        }
+      }
+      
+      // Autres plateformes (Facebook, Kijiji) - Pour l'instant juste sauvegardées
+      const otherPlatforms = platforms.filter(p => p !== 'ebay');
+      if (otherPlatforms.length > 0) {
+        setTimeout(() => {
+          this.showNotification(
+            '📝 ' + otherPlatforms.join(', ') + ': Annonce sauvegardée (publication manuelle requise)', 
+            'info'
+          );
+        }, 2000);
+      }
+      
+      // Réinitialiser le formulaire
+      setTimeout(() => {
+        annonceForm.reset();
+        this.showNotification('✨ Formulaire réinitialisé', 'success');
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Erreur publication annonce:', error);
+      this.showNotification('❌ Erreur: ' + error.message, 'error');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalText;
+    }
+  }
+
   async generateAIDescription() {
     const selectLivre = document.getElementById('annonceSelectLivre');
     const descInput = document.getElementById('annonceDescription');
@@ -2446,6 +2652,198 @@ class CollectionEvaluator {
       // Réactiver le bouton
       generateBtn.disabled = false;
       generateBtn.innerHTML = originalText;
+    }
+  }
+
+  async loadMesAnnonces() {
+    try {
+      const filterStatus = document.getElementById('filterStatus');
+      const filterPlatform = document.getElementById('filterPlatform');
+      
+      const status = filterStatus ? filterStatus.value : 'all';
+      const platform = filterPlatform ? filterPlatform.value : '';
+      
+      let url = '/api/ads-publish/list?status=' + status;
+      if (platform) {
+        url += '&platform=' + platform;
+      }
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.success) {
+        this.displayMesAnnonces(data.ads);
+      } else {
+        this.showNotification('❌ Erreur chargement annonces', 'error');
+      }
+    } catch (error) {
+      console.error('Erreur chargement annonces:', error);
+      this.showNotification('❌ Erreur de connexion', 'error');
+    }
+  }
+
+  displayMesAnnonces(ads) {
+    const listContainer = document.getElementById('annoncesList');
+    const emptyState = document.getElementById('annoncesEmpty');
+    
+    if (!ads || ads.length === 0) {
+      listContainer.innerHTML = '';
+      emptyState.classList.remove('hidden');
+      return;
+    }
+    
+    emptyState.classList.add('hidden');
+    listContainer.innerHTML = '';
+    
+    ads.forEach(ad => {
+      const statusColors = {
+        draft: 'bg-yellow-100 text-yellow-800',
+        published: 'bg-green-100 text-green-800',
+        archived: 'bg-gray-100 text-gray-800'
+      };
+      
+      const platformIcons = {
+        ebay: 'fa-ebay',
+        facebook: 'fa-facebook',
+        kijiji: 'fa-newspaper',
+        abebooks: 'fa-book'
+      };
+      
+      // Create ad card
+      const adCard = document.createElement('div');
+      adCard.className = 'border rounded-lg p-4 hover:shadow-lg transition';
+      
+      // Build HTML using string concatenation to avoid template literal issues
+      let html = '<div class="flex items-start justify-between">';
+      html += '<div class="flex-1">';
+      html += '<div class="flex items-center space-x-3 mb-2">';
+      html += '<span class="px-3 py-1 rounded-full text-xs font-semibold ' + (statusColors[ad.status] || 'bg-gray-100') + '">';
+      html += ad.status + '</span>';
+      html += '<span class="text-sm text-gray-600"><i class="fab ' + (platformIcons[ad.platform] || 'fa-globe') + ' mr-1"></i>' + ad.platform + '</span>';
+      html += '<span class="text-sm text-gray-500">' + new Date(ad.created_at).toLocaleDateString('fr-FR') + '</span>';
+      html += '</div>';
+      html += '<h3 class="text-lg font-semibold mb-2">' + ad.title + '</h3>';
+      html += '<p class="text-sm text-gray-600 mb-2 line-clamp-2">' + ad.description.substring(0, 150) + '...</p>';
+      html += '<div class="flex items-center space-x-4 text-sm">';
+      html += '<span class="font-semibold text-green-600">' + (ad.price ? ad.price + ' CAD' : 'Prix non défini') + '</span>';
+      if (ad.ebay_listing_url) {
+        html += '<a href="' + ad.ebay_listing_url + '" target="_blank" class="text-blue-600 hover:underline">';
+        html += '<i class="fas fa-external-link-alt mr-1"></i>Voir sur eBay</a>';
+      }
+      html += '</div></div>';
+      html += '<div class="flex flex-col space-y-2 ml-4">';
+      if (ad.status === 'draft' && ad.platform === 'ebay') {
+        html += '<button onclick="window.app.publishAdToEbay(' + ad.id + ')" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">';
+        html += '<i class="fas fa-rocket mr-1"></i>Publier</button>';
+      }
+      html += '<button onclick="window.app.deleteAd(' + ad.id + ')" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">';
+      html += '<i class="fas fa-trash mr-1"></i>Supprimer</button>';
+      html += '</div></div>';
+      
+      adCard.innerHTML = html;
+      listContainer.appendChild(adCard);
+    });
+  }
+
+  async publishAdToEbay(adId) {
+    if (!confirm('Publier cette annonce sur eBay ?')) return;
+    
+    try {
+      this.showNotification('🚀 Publication sur eBay...', 'info');
+      
+      const response = await fetch('/api/ads-publish/publish-ebay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adId })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        this.showNotification('✅ Publié sur eBay !', 'success');
+        this.loadMesAnnonces(); // Recharger la liste
+      } else {
+        this.showNotification('❌ Erreur: ' + data.error.message, 'error');
+      }
+    } catch (error) {
+      console.error('Erreur publication eBay:', error);
+      this.showNotification('❌ Erreur de connexion', 'error');
+    }
+  }
+
+  async deleteAd(adId) {
+    if (!confirm('Supprimer cette annonce ?')) return;
+    
+    try {
+      const response = await fetch('/api/ads-publish/' + adId, {
+        method: 'DELETE'
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        this.showNotification('✅ Annonce supprimée', 'success');
+        this.loadMesAnnonces(); // Recharger la liste
+      } else {
+        this.showNotification('❌ Erreur de suppression', 'error');
+      }
+    } catch (error) {
+      console.error('Erreur suppression:', error);
+      this.showNotification('❌ Erreur de connexion', 'error');
+    }
+  }
+
+  async exportAnnoncesCsv() {
+    try {
+      this.showNotification('📥 Export CSV en cours...', 'info');
+      
+      const filterStatus = document.getElementById('filterStatus');
+      const filterPlatform = document.getElementById('filterPlatform');
+      
+      const status = filterStatus ? filterStatus.value : 'all';
+      const platform = filterPlatform ? filterPlatform.value : '';
+      
+      let url = '/api/ads-publish/list?status=' + status;
+      if (platform) {
+        url += '&platform=' + platform;
+      }
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (!data.success || !data.ads || data.ads.length === 0) {
+        this.showNotification('❌ Aucune annonce à exporter', 'warning');
+        return;
+      }
+      
+      // Générer le CSV
+      const headers = ['ID', 'Titre', 'Prix', 'Plateforme', 'Statut', 'Date création', 'Lien eBay'];
+      const rows = data.ads.map(ad => [
+        ad.id,
+        '"' + ad.title.replace(/"/g, '""') + '"',
+        ad.price || 0,
+        ad.platform,
+        ad.status,
+        new Date(ad.created_at).toLocaleDateString('fr-FR'),
+        ad.ebay_listing_url || ''
+      ]);
+      
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.join(','))
+      ].join('\\n');
+      
+      // Télécharger
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'annonces_export_' + new Date().toISOString().split('T')[0] + '.csv';
+      link.click();
+      
+      setTimeout(() => URL.revokeObjectURL(link.href), 100);
+      
+      this.showNotification('✅ Export réussi !', 'success');
+    } catch (error) {
+      console.error('Erreur export CSV:', error);
+      this.showNotification('❌ Erreur lors de l\\'export', 'error');
     }
   }
 
@@ -3745,6 +4143,7 @@ app.route('/api/items', itemsRouter);
 app.route('/api/monitoring', monitoringRouter);
 app.route('/api/export', exportRoutes);
 app.route('/api/ads', adsRouter);
+app.route('/api/ads-publish', adsPublishRouter);
 
 // ============================================================================
 // BOOKS PAGE
