@@ -524,6 +524,30 @@ app.get('/', async (c) => {
                 Créer une Annonce de Vente
             </h2>
 
+            <!-- eBay Authorization Status -->
+            <div id="ebayAuthSection" class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <i class="fab fa-ebay text-3xl text-blue-600 mr-3"></i>
+                        <div>
+                            <h3 class="font-semibold text-gray-800">Connexion eBay</h3>
+                            <p id="ebayStatusText" class="text-sm text-gray-600">Vérification...</p>
+                        </div>
+                    </div>
+                    <button type="button" id="authorizeEbayBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 hidden">
+                        <i class="fas fa-link mr-2"></i>Autoriser eBay
+                    </button>
+                    <div id="ebayConnected" class="flex items-center text-green-600 hidden">
+                        <i class="fas fa-check-circle mr-2"></i>
+                        <span class="font-medium">Connecté</span>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    Autorisez eBay pour publier automatiquement vos annonces sur le marketplace
+                </p>
+            </div>
+
             <form id="annonceForm" class="space-y-6">
                 <!-- Sélection livre -->
                 <div>
@@ -940,6 +964,12 @@ class CollectionEvaluator {
     const generateDescriptionBtn = document.getElementById('generateDescription');
     if (generateDescriptionBtn) {
       generateDescriptionBtn.addEventListener('click', () => this.generateAIDescription());
+    }
+
+    // Bouton "Autoriser eBay"
+    const authorizeEbayBtn = document.getElementById('authorizeEbayBtn');
+    if (authorizeEbayBtn) {
+      authorizeEbayBtn.addEventListener('click', () => this.authorizeEbay());
     }
 
     // Formulaire de publication d'annonce
@@ -2389,6 +2419,8 @@ class CollectionEvaluator {
     } else if (pageName === 'Annonce') {
       // Charger les livres pour le formulaire d'annonce
       this.loadBooksForAnnonce();
+      // Vérifier le statut eBay
+      this.checkEbayStatus();
     } else if (pageName === 'MesAnnonces') {
       // Charger les annonces créées
       this.loadMesAnnonces();
@@ -2844,6 +2876,94 @@ class CollectionEvaluator {
     } catch (error) {
       console.error('Erreur export CSV:', error);
       this.showNotification('❌ Erreur lors de l\\'export', 'error');
+    }
+  }
+
+  async checkEbayStatus() {
+    try {
+      const response = await fetch('/api/ads-publish/ebay/token-status');
+      const data = await response.json();
+      
+      const statusText = document.getElementById('ebayStatusText');
+      const authorizeBtn = document.getElementById('authorizeEbayBtn');
+      const connectedIndicator = document.getElementById('ebayConnected');
+      const authSection = document.getElementById('ebayAuthSection');
+      
+      if (data.success && data.hasToken && !data.isExpired) {
+        // Connecté
+        if (statusText) statusText.textContent = 'Connexion active - Publications automatiques activées';
+        if (authorizeBtn) authorizeBtn.classList.add('hidden');
+        if (connectedIndicator) connectedIndicator.classList.remove('hidden');
+        if (authSection) authSection.classList.remove('bg-blue-50', 'border-blue-200');
+        if (authSection) authSection.classList.add('bg-green-50', 'border-green-200');
+      } else {
+        // Non connecté ou expiré
+        if (statusText) statusText.textContent = 'Non connecté - Publications en mode simulation';
+        if (authorizeBtn) authorizeBtn.classList.remove('hidden');
+        if (connectedIndicator) connectedIndicator.classList.add('hidden');
+        if (authSection) authSection.classList.remove('bg-green-50', 'border-green-200');
+        if (authSection) authSection.classList.add('bg-blue-50', 'border-blue-200');
+      }
+    } catch (error) {
+      console.error('Erreur vérification statut eBay:', error);
+    }
+  }
+
+  async authorizeEbay() {
+    try {
+      // Obtenir l'URL d'autorisation
+      const response = await fetch('/api/ads-publish/ebay/auth-url');
+      const data = await response.json();
+      
+      if (data.success && data.authUrl) {
+        // Ouvrir popup OAuth
+        const width = 600;
+        const height = 800;
+        const left = (screen.width - width) / 2;
+        const top = (screen.height - height) / 2;
+        
+        const popup = window.open(
+          data.authUrl,
+          'ebay-oauth',
+          'width=' + width + ',height=' + height + ',left=' + left + ',top=' + top
+        );
+        
+        // Écouter le message de retour
+        window.addEventListener('message', async (event) => {
+          if (event.data.type === 'ebay-oauth-code') {
+            const code = event.data.code;
+            
+            // Fermer popup
+            if (popup) popup.close();
+            
+            // Échanger le code contre un token
+            this.showNotification('🔄 Échange du code d\\'autorisation...', 'info');
+            
+            const tokenResponse = await fetch('/api/ads-publish/ebay/exchange-token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ code })
+            });
+            
+            const tokenData = await tokenResponse.json();
+            
+            if (tokenData.success) {
+              this.showNotification('✅ eBay autorisé avec succès !', 'success');
+              // Rafraîchir le statut
+              this.checkEbayStatus();
+            } else {
+              this.showNotification('❌ Erreur d\\'autorisation: ' + tokenData.error.message, 'error');
+            }
+          }
+        }, { once: true });
+        
+        this.showNotification('🔐 Redirection vers eBay pour autorisation...', 'info');
+      } else {
+        this.showNotification('❌ Impossible d\\'obtenir l\\'URL d\\'autorisation', 'error');
+      }
+    } catch (error) {
+      console.error('Erreur autorisation eBay:', error);
+      this.showNotification('❌ Erreur lors de l\\'autorisation eBay', 'error');
     }
   }
 

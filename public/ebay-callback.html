@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>eBay Authorization - Callback</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 400px;
+            text-align: center;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .success {
+            color: #10b981;
+            font-size: 3rem;
+        }
+        .error {
+            color: #ef4444;
+            font-size: 3rem;
+        }
+        h2 {
+            color: #1f2937;
+            margin: 1rem 0;
+        }
+        p {
+            color: #6b7280;
+            margin: 0.5rem 0;
+        }
+        .code {
+            background: #f3f4f6;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            word-break: break-all;
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner" id="spinner"></div>
+        <div id="successIcon" class="success" style="display:none;">✓</div>
+        <div id="errorIcon" class="error" style="display:none;">✗</div>
+        
+        <h2 id="title">Autorisation en cours...</h2>
+        <p id="message">Traitement de votre autorisation eBay</p>
+        <div id="codeDisplay" class="code" style="display:none;"></div>
+    </div>
+
+    <script>
+        // Extraire le code d'autorisation de l'URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const error = urlParams.get('error');
+        const errorDescription = urlParams.get('error_description');
+
+        const spinner = document.getElementById('spinner');
+        const successIcon = document.getElementById('successIcon');
+        const errorIcon = document.getElementById('errorIcon');
+        const title = document.getElementById('title');
+        const message = document.getElementById('message');
+        const codeDisplay = document.getElementById('codeDisplay');
+
+        if (error) {
+            // Erreur d'autorisation
+            spinner.style.display = 'none';
+            errorIcon.style.display = 'block';
+            title.textContent = 'Autorisation refusée';
+            message.textContent = errorDescription || 'L\'autorisation eBay a été refusée ou annulée';
+            
+            // Fermer après 3 secondes
+            setTimeout(() => {
+                window.close();
+            }, 3000);
+        } else if (code) {
+            // Code reçu, envoyer au parent
+            spinner.style.display = 'none';
+            successIcon.style.display = 'block';
+            title.textContent = 'Autorisation réussie !';
+            message.textContent = 'Transfert du code d\'autorisation...';
+            
+            // Debug: Afficher le code (à commenter en production)
+            // codeDisplay.textContent = 'Code: ' + code;
+            // codeDisplay.style.display = 'block';
+
+            // Envoyer le code au parent ou à l'opener
+            if (window.opener) {
+                window.opener.postMessage({
+                    type: 'ebay-oauth-code',
+                    code: code
+                }, '*');
+                
+                message.textContent = 'Code transmis ! Fermeture...';
+                
+                // Fermer après 2 secondes
+                setTimeout(() => {
+                    window.close();
+                }, 2000);
+            } else {
+                // Pas de fenêtre parente, afficher le code pour copie manuelle
+                message.textContent = 'Copiez ce code et fermez cette fenêtre:';
+                codeDisplay.textContent = code;
+                codeDisplay.style.display = 'block';
+            }
+        } else {
+            // Aucun code ni erreur
+            spinner.style.display = 'none';
+            errorIcon.style.display = 'block';
+            title.textContent = 'Erreur';
+            message.textContent = 'Aucun code d\'autorisation reçu';
+            
+            setTimeout(() => {
+                window.close();
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
