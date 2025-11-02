@@ -5,14 +5,130 @@
 
 import { Hono } from 'hono';
 import { createLogger } from '../lib/logger';
+import { EbayOAuthService } from '../services/ebay-oauth.service';
 
 type Bindings = {
   DB: D1Database;
   EBAY_CLIENT_ID?: string;
   EBAY_CLIENT_SECRET?: string;
+  EBAY_DEV_ID?: string;
+  EBAY_ENVIRONMENT?: string;
 };
 
 export const adsPublishRouter = new Hono<{ Bindings: Bindings }>();
+
+// Store tokens temporarily (in production, use D1 or KV storage)
+const userTokens = new Map<string, { access_token: string; refresh_token: string; expires_at: number }>();
+
+/**
+ * GET /api/ads-publish/ebay/auth-url
+ * Get eBay OAuth authorization URL
+ */
+adsPublishRouter.get('/ebay/auth-url', async (c) => {
+  const logger = createLogger(crypto.randomUUID());
+  
+  try {
+    const ebayService = new EbayOAuthService(
+      c.env.EBAY_CLIENT_ID || '',
+      c.env.EBAY_CLIENT_SECRET || '',
+      c.env.EBAY_DEV_ID || '',
+      (c.env.EBAY_ENVIRONMENT as 'sandbox' | 'production') || 'sandbox',
+      c.req.query('redirect_uri')
+    );
+    
+    const authUrl = ebayService.getAuthorizationUrl();
+    
+    return c.json({
+      success: true,
+      authUrl,
+      message: 'Redirect user to this URL to authorize access'
+    });
+    
+  } catch (error: any) {
+    logger.error('Failed to generate auth URL', { error: error.message });
+    return c.json({
+      success: false,
+      error: { code: 'AUTH_URL_ERROR', message: error.message }
+    }, 500);
+  }
+});
+
+/**
+ * POST /api/ads-publish/ebay/exchange-token
+ * Exchange authorization code for access token
+ */
+adsPublishRouter.post('/ebay/exchange-token', async (c) => {
+  const logger = createLogger(crypto.randomUUID());
+  
+  try {
+    const { code } = await c.req.json();
+    
+    if (!code) {
+      return c.json({
+        success: false,
+        error: { code: 'INVALID_INPUT', message: 'Authorization code required' }
+      }, 400);
+    }
+    
+    const ebayService = new EbayOAuthService(
+      c.env.EBAY_CLIENT_ID || '',
+      c.env.EBAY_CLIENT_SECRET || '',
+      c.env.EBAY_DEV_ID || '',
+      (c.env.EBAY_ENVIRONMENT as 'sandbox' | 'production') || 'sandbox'
+    );
+    
+    const tokenData = await ebayService.exchangeCodeForToken(code);
+    
+    // Store token (in production, save to D1 or KV with user association)
+    const userId = 'default'; // Replace with actual user ID in production
+    userTokens.set(userId, {
+      access_token: tokenData.access_token,
+      refresh_token: tokenData.refresh_token || '',
+      expires_at: Date.now() + (tokenData.expires_in * 1000)
+    });
+    
+    logger.info('Token exchanged successfully', { userId });
+    
+    return c.json({
+      success: true,
+      message: 'eBay access granted successfully',
+      expiresIn: tokenData.expires_in
+    });
+    
+  } catch (error: any) {
+    logger.error('Token exchange failed', { error: error.message });
+    return c.json({
+      success: false,
+      error: { code: 'TOKEN_EXCHANGE_ERROR', message: error.message }
+    }, 500);
+  }
+});
+
+/**
+ * GET /api/ads-publish/ebay/token-status
+ * Check if user has valid eBay token
+ */
+adsPublishRouter.get('/ebay/token-status', async (c) => {
+  const userId = 'default'; // Replace with actual user ID
+  const token = userTokens.get(userId);
+  
+  if (!token) {
+    return c.json({
+      success: true,
+      hasToken: false,
+      message: 'No eBay authorization found'
+    });
+  }
+  
+  const isExpired = Date.now() > token.expires_at;
+  
+  return c.json({
+    success: true,
+    hasToken: true,
+    isExpired,
+    expiresAt: new Date(token.expires_at).toISOString()
+  });
+});
 
 /**
  * POST /api/ads-publish/save
@@ -127,10 +243,63 @@ adsPublishRouter.post('/publish-ebay', async (c) => {
       }, 404);
     }
 
-    // TODO: Implémenter l'API eBay réelle
-    // Pour l'instant, simuler la publication
-    const ebayListingId = `EBAY-${Date.now()}`;
-    const ebayListingUrl = `https://www.ebay.ca/itm/${ebayListingId}`;
+    // Check if user has eBay token
+    const userId = 'default'; // Replace with actual user ID
+    const tokenData = userTokens.get(userId);
+    
+    let ebayListingId: string;
+    let ebayListingUrl: string;
+    let isRealListing = false;
+    
+    if (tokenData && Date.now() < tokenData.expires_at) {
+      // Real eBay API publication
+      try {
+        const ebayService = new EbayOAuthService(
+          c.env.EBAY_CLIENT_ID || '',
+          c.env.EBAY_CLIENT_SECRET || '',
+          c.env.EBAY_DEV_ID || '',
+          (c.env.EBAY_ENVIRONMENT as 'sandbox' | 'production') || 'sandbox'
+        );
+        
+        // Generate unique SKU
+        const sku = 'ITEM-' + ad.item_id + '-' + Date.now();
+        
+        // Prepare listing data
+        const listingData = {
+          sku,
+          title: ad.title,
+          description: ad.description,
+          price: parseFloat(ad.price) || 0,
+          quantity: 1,
+          condition: ad.condition || 'USED_GOOD',
+          categoryId: '267', // Books category - adjust as needed
+          imageUrls: ad.primary_image_url ? [ad.primary_image_url] : [],
+          location: {
+            country: 'CA',
+            postalCode: 'H1A1A1' // Default - should be configured per user
+          }
+        };
+        
+        const result = await ebayService.createAndPublishListing(tokenData.access_token, listingData);
+        
+        ebayListingId = result.listingId;
+        ebayListingUrl = result.listingUrl;
+        isRealListing = true;
+        
+        logger.info('Real eBay listing created', { adId, listingId: ebayListingId });
+        
+      } catch (ebayError: any) {
+        logger.error('Real eBay publication failed, falling back to simulation', { error: ebayError.message });
+        // Fall back to simulation
+        ebayListingId = 'EBAY-SIMULATED-' + Date.now();
+        ebayListingUrl = 'https://www.ebay.ca/itm/' + ebayListingId;
+      }
+    } else {
+      // Simulate publication (no token or expired)
+      ebayListingId = 'EBAY-SIMULATED-' + Date.now();
+      ebayListingUrl = 'https://www.ebay.ca/itm/' + ebayListingId;
+      logger.info('eBay publication simulated (no token)', { adId });
+    }
 
     // Mettre à jour le statut
     await db.prepare(`
@@ -143,14 +312,14 @@ adsPublishRouter.post('/publish-ebay', async (c) => {
       WHERE id = ?
     `).bind(ebayListingId, ebayListingUrl, adId).run();
 
-    logger.info('eBay publication simulated', { adId, ebayListingId });
-
     return c.json({
       success: true,
       ebayListingId,
       ebayListingUrl,
-      message: 'Annonce publiée sur eBay (simulation)',
-      note: 'Configuration API eBay requise pour publication réelle',
+      isRealListing,
+      message: isRealListing 
+        ? 'Annonce publiée sur eBay avec succès !' 
+        : 'Annonce sauvegardée (simulation - autorisez eBay pour publication réelle)',
       timestamp: new Date().toISOString()
     });
 
