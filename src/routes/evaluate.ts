@@ -15,6 +15,7 @@ import { createLogger } from '../lib/logger';
 import { Metrics } from '../lib/metrics';
 import { ExpertService } from '../services/ExpertService';
 import { APICacheService } from '../services/api-cache-service';
+import { MarketPriceService } from '../services/MarketPriceService';
 
 export const evaluateRoutes = new Hono<{ Bindings: any }>();
 
@@ -48,6 +49,7 @@ evaluateRoutes.post(
 
       // Initialize services
       const expertService = new ExpertService(env, logger);
+      const marketPriceService = new MarketPriceService(env, logger);
       const cache = new APICacheService(env.DB);
 
       // Prepare expert input
@@ -107,12 +109,33 @@ evaluateRoutes.post(
         };
       }
 
-      // Market insights (simplified for now)
-      const market_insights = {
+      // Get real market prices from eBay, Discogs, Google Books
+      let market_insights = {
         rarity_assessment: `Estimated as ${smart_analysis.estimated_rarity.replace('_', ' ')}`,
         market_trend: 'stable' as const,
         estimated_demand: 'medium' as const
       };
+
+      // Fetch market prices if available
+      const primaryAnalysis = analyses[0];
+      let marketPrices = null;
+      
+      try {
+        marketPrices = await marketPriceService.getMarketPrices(primaryAnalysis);
+        
+        if (marketPrices) {
+          // Update market insights with real data
+          market_insights = marketPrices.market_insights;
+          
+          logger.info('Market prices fetched', {
+            estimated_value: marketPrices.estimated_value,
+            sources: marketPrices.sources_used,
+            confidence: marketPrices.confidence
+          });
+        }
+      } catch (error: any) {
+        logger.warn('Failed to fetch market prices', error);
+      }
 
       // Generate search queries for improvements
       const suggested_improvements: string[] = [];
@@ -125,11 +148,19 @@ evaluateRoutes.post(
 
       const processingTime = Date.now() - startTime;
 
-      // Build response
+      // Build response with market data
       const response = {
         success: true,
         smart_analysis,
-        evaluations: [], // Would integrate with price services
+        evaluations: marketPrices ? [{
+          source: marketPrices.sources_used.join(', '),
+          estimated_value: marketPrices.estimated_value,
+          price_range_min: marketPrices.price_range_min,
+          price_range_max: marketPrices.price_range_max,
+          currency: marketPrices.currency,
+          confidence: marketPrices.confidence,
+          comparable_sales: marketPrices.comparable_sales
+        }] : [],
         market_insights,
         suggested_improvements,
         cached: useCache,

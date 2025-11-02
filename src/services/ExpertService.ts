@@ -1,7 +1,7 @@
 // 🧠 Unified Expert Service
 // Manages multiple AI experts with weighted consolidation
 
-import { OpenAIVisionExpert, ClaudeCollectionExpert, GeminiComparativeExpert } from '../ai-experts';
+import { MultiExpertAISystem } from '../ai-experts';
 import { Logger } from '../lib/logger';
 import { Metrics } from '../lib/metrics';
 import {
@@ -61,15 +61,11 @@ export interface ConsolidatedResult {
 }
 
 export class ExpertService {
-  private openaiExpert: OpenAIVisionExpert;
-  private claudeExpert: ClaudeCollectionExpert;
-  private geminiExpert: GeminiComparativeExpert;
+  private aiSystem: MultiExpertAISystem;
   private logger: Logger;
 
   constructor(env: any, logger: Logger) {
-    this.openaiExpert = new OpenAIVisionExpert(env);
-    this.claudeExpert = new ClaudeCollectionExpert(env);
-    this.geminiExpert = new GeminiComparativeExpert(env);
+    this.aiSystem = new MultiExpertAISystem(env);
     this.logger = logger;
   }
 
@@ -80,136 +76,71 @@ export class ExpertService {
     input: ExpertInput,
     enabledExperts: ExpertType[] = ['vision', 'claude', 'gemini']
   ): Promise<ExpertAnalysis[]> {
-    const promises: Promise<ExpertAnalysis | null>[] = [];
-
-    // Vision expert (requires images)
-    if (enabledExperts.includes('vision') && input.imageUrls && input.imageUrls.length > 0) {
-      promises.push(this.queryVisionExpert(input));
-    }
-
-    // Claude expert (text or images)
-    if (enabledExperts.includes('claude')) {
-      promises.push(this.queryClaudeExpert(input));
-    }
-
-    // Gemini expert (comparative analysis)
-    if (enabledExperts.includes('gemini')) {
-      promises.push(this.queryGeminiExpert(input));
-    }
-
-    const results = await Promise.allSettled(promises);
-
-    const analyses: ExpertAnalysis[] = [];
-    results.forEach((result, index) => {
-      if (result.status === 'fulfilled' && result.value) {
-        analyses.push(result.value);
-      } else if (result.status === 'rejected') {
-        const expertName = enabledExperts[index];
-        this.logger.error(`Expert ${expertName} failed`, result.reason);
-        Metrics.trackExpert(expertName, false, 0);
-      }
-    });
-
-    return analyses;
-  }
-
-  /**
-   * Query OpenAI Vision expert
-   */
-  private async queryVisionExpert(input: ExpertInput): Promise<ExpertAnalysis | null> {
     const startTime = Date.now();
 
     try {
-      const result = await this.openaiExpert.analyzeWithVision(
-        input.imageUrls || [],
-        input.text_input
-      );
+      // Use the existing MultiExpertAISystem
+      const imageUrl = input.imageUrls && input.imageUrls.length > 0 ? input.imageUrls[0] : undefined;
+      const result = await this.aiSystem.analyzeCollection(imageUrl, input.text_input, { category: input.category });
 
-      const latency = Date.now() - startTime;
-      Metrics.trackExpert('vision', true, latency);
-
-      return {
-        expert: 'vision',
-        category: this.normalizeCategory(result.category),
-        confidence: result.confidence || 0.8,
-        extracted_data: result.extracted_data || {},
-        estimated_rarity: result.estimated_rarity || 'common',
-        search_queries: result.search_queries || [],
-        latency_ms: latency,
+      // Convert result to ExpertAnalysis format
+      const analysis: ExpertAnalysis = {
+        expert: 'vision', // Primary expert used
+        category: this.normalizeCategory(result.consensus_category),
+        confidence: result.expert_consensus / 100,
+        extracted_data: {
+          title: result.consensus_title,
+          artist_author: result.consensus_author_artist,
+          year: result.consensus_year,
+          condition: this.mapConditionFromAnalysis(result),
+          format: undefined,
+          publisher_label: undefined,
+          manufacturer: undefined,
+          edition: undefined,
+          isbn: undefined,
+          catalog_number: undefined,
+          dimensions: undefined,
+          weight: undefined,
+          materials: []
+        },
+        estimated_rarity: this.mapRarityLevel(result.rarity_assessment.level),
+        search_queries: result.comparable_sales || [],
+        latency_ms: Date.now() - startTime,
         raw_payload: result
       };
+
+      this.logger.info('Expert analysis completed', {
+        category: analysis.category,
+        confidence: analysis.confidence,
+        latency_ms: analysis.latency_ms
+      });
+
+      return [analysis];
+
     } catch (error: any) {
-      const latency = Date.now() - startTime;
-      Metrics.trackExpert('vision', false, latency);
-      this.logger.error('Vision expert error', error);
-      return null;
+      this.logger.error('Expert analysis failed', error);
+      return [];
     }
   }
 
   /**
-   * Query Claude expert
+   * Helper: Map rarity level to our format
    */
-  private async queryClaudeExpert(input: ExpertInput): Promise<ExpertAnalysis | null> {
-    const startTime = Date.now();
-
-    try {
-      const result = await this.claudeExpert.analyzeCollection(
-        input.text_input || '',
-        input.imageUrls
-      );
-
-      const latency = Date.now() - startTime;
-      Metrics.trackExpert('claude', true, latency);
-
-      return {
-        expert: 'claude',
-        category: this.normalizeCategory(result.category),
-        confidence: result.confidence || 0.85,
-        extracted_data: result.extracted_data || {},
-        estimated_rarity: result.estimated_rarity || 'common',
-        search_queries: result.search_queries || [],
-        latency_ms: latency,
-        raw_payload: result
-      };
-    } catch (error: any) {
-      const latency = Date.now() - startTime;
-      Metrics.trackExpert('claude', false, latency);
-      this.logger.error('Claude expert error', error);
-      return null;
-    }
+  private mapRarityLevel(level: string): 'common' | 'uncommon' | 'rare' | 'very_rare' | 'ultra_rare' {
+    const normalized = level.toLowerCase().replace(/\s+/g, '_');
+    if (normalized.includes('extremely')) return 'ultra_rare';
+    if (normalized.includes('very')) return 'very_rare';
+    if (normalized.includes('rare')) return 'rare';
+    if (normalized.includes('uncommon')) return 'uncommon';
+    return 'common';
   }
 
   /**
-   * Query Gemini expert
+   * Helper: Map condition from analysis
    */
-  private async queryGeminiExpert(input: ExpertInput): Promise<ExpertAnalysis | null> {
-    const startTime = Date.now();
-
-    try {
-      const result = await this.geminiExpert.compareAndEstimate(
-        input.text_input || '',
-        input.category
-      );
-
-      const latency = Date.now() - startTime;
-      Metrics.trackExpert('gemini', true, latency);
-
-      return {
-        expert: 'gemini',
-        category: this.normalizeCategory(result.category || input.category),
-        confidence: result.confidence || 0.75,
-        extracted_data: result.extracted_data || {},
-        estimated_rarity: result.estimated_rarity || 'common',
-        search_queries: result.search_queries || [],
-        latency_ms: latency,
-        raw_payload: result
-      };
-    } catch (error: any) {
-      const latency = Date.now() - startTime;
-      Metrics.trackExpert('gemini', false, latency);
-      this.logger.error('Gemini expert error', error);
-      return null;
-    }
+  private mapConditionFromAnalysis(result: any): string | undefined {
+    // Try to extract condition from market_analysis or other fields
+    return undefined; // Simplified for now
   }
 
   /**
