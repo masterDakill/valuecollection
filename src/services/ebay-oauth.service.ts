@@ -12,6 +12,7 @@ export interface EbayTokenResponse {
 
 export interface EbayEnvironment {
   authUrl: string;
+  tokenUrl: string;
   apiUrl: string;
   name: 'sandbox' | 'production';
 }
@@ -27,11 +28,13 @@ export class EbayOAuthService {
   private static readonly ENVIRONMENTS = {
     sandbox: {
       authUrl: 'https://auth.sandbox.ebay.com',
+      tokenUrl: 'https://api.sandbox.ebay.com',
       apiUrl: 'https://api.sandbox.ebay.com',
       name: 'sandbox' as const
     },
     production: {
       authUrl: 'https://auth.ebay.com',
+      tokenUrl: 'https://api.ebay.com',
       apiUrl: 'https://api.ebay.com',
       name: 'production' as const
     }
@@ -81,7 +84,7 @@ export class EbayOAuthService {
   async exchangeCodeForToken(code: string): Promise<EbayTokenResponse> {
     const credentials = btoa(this.clientId + ':' + this.clientSecret);
     
-    const response = await fetch(this.environment.authUrl + '/identity/v1/oauth2/token', {
+    const response = await fetch(this.environment.tokenUrl + '/identity/v1/oauth2/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -108,7 +111,7 @@ export class EbayOAuthService {
   async getApplicationToken(): Promise<EbayTokenResponse> {
     const credentials = btoa(this.clientId + ':' + this.clientSecret);
     
-    const response = await fetch(this.environment.authUrl + '/identity/v1/oauth2/token', {
+    const response = await fetch(this.environment.tokenUrl + '/identity/v1/oauth2/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -134,7 +137,7 @@ export class EbayOAuthService {
   async refreshToken(refreshToken: string): Promise<EbayTokenResponse> {
     const credentials = btoa(this.clientId + ':' + this.clientSecret);
     
-    const response = await fetch(this.environment.authUrl + '/identity/v1/oauth2/token', {
+    const response = await fetch(this.environment.tokenUrl + '/identity/v1/oauth2/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
