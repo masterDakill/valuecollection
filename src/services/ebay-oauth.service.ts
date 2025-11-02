@@ -60,7 +60,8 @@ export class EbayOAuthService {
     this.clientSecret = clientSecret;
     this.devId = devId;
     this.environment = EbayOAuthService.ENVIRONMENTS[environment];
-    this.redirectUri = redirectUri || 'https://localhost:3002/ebay/callback';
+    // Use RuName as redirect_uri for eBay OAuth
+    this.redirectUri = redirectUri || 'Mathieu_Chamber-MathieuC-Collec-mpbzllj';
   }
 
   /**

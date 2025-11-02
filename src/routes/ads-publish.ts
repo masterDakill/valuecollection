@@ -13,6 +13,7 @@ type Bindings = {
   EBAY_CLIENT_SECRET?: string;
   EBAY_DEV_ID?: string;
   EBAY_ENVIRONMENT?: string;
+  EBAY_RUNAME?: string;
 };
 
 export const adsPublishRouter = new Hono<{ Bindings: Bindings }>();
@@ -33,7 +34,7 @@ adsPublishRouter.get('/ebay/auth-url', async (c) => {
       c.env.EBAY_CLIENT_SECRET || '',
       c.env.EBAY_DEV_ID || '',
       (c.env.EBAY_ENVIRONMENT as 'sandbox' | 'production') || 'sandbox',
-      c.req.query('redirect_uri')
+      c.req.query('redirect_uri') || c.env.EBAY_RUNAME
     );
     
     const authUrl = ebayService.getAuthorizationUrl();
