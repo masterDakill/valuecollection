@@ -6,6 +6,7 @@ import { photosRouter } from './routes/photos';
 import { itemsRouter } from './routes/items';
 import { monitoringRouter } from './routes/monitoring';
 import exportRoutes from './routes/export';
+import { adsRouter } from './routes/ads';
 import booksHtml from '../public/books.html?raw';
 // Types pour les bindings Cloudflare
 type Bindings = {
@@ -3611,6 +3612,7 @@ app.route('/api/photos', photosRouter);
 app.route('/api/items', itemsRouter);
 app.route('/api/monitoring', monitoringRouter);
 app.route('/api/export', exportRoutes);
+app.route('/api/ads', adsRouter);
 
 // ============================================================================
 // BOOKS PAGE
