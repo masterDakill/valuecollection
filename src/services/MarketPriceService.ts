@@ -1,9 +1,10 @@
 // 💰 Market Price Service - Intégration des prix de marché réels
-// Combine eBay, Discogs, Google Books pour des évaluations basées sur des données réelles
+// Combine eBay, Discogs, Google Books, PriceAggregator pour des évaluations basées sur des données réelles
 
 import { EbayService } from './ebay-service';
 import { DiscogsService } from './discogs-service';
 import { BooksService } from './books-service';
+import { createPriceAggregatorService } from './price-aggregator.service';
 import { Logger } from '../lib/logger';
 import { ExpertAnalysis } from './ExpertService';
 
@@ -50,10 +51,13 @@ export class MarketPriceService {
   private ebayService?: EbayService;
   private discogsService?: DiscogsService;
   private booksService?: BooksService;
+  private priceAggregator?: any;
   private logger: Logger;
+  private env: any;
 
   constructor(env: any, logger: Logger) {
     this.logger = logger;
+    this.env = env;
 
     // Initialize eBay service
     if (env.EBAY_CLIENT_ID && env.EBAY_CLIENT_SECRET) {
@@ -86,6 +90,15 @@ export class MarketPriceService {
     } else {
       this.logger.warn('Google Books API key missing - book pricing unavailable');
     }
+
+    // Initialize Price Aggregator Service (web scraping + Gemini search)
+    this.priceAggregator = createPriceAggregatorService(
+      env.EBAY_CLIENT_ID,
+      env.GEMINI_API_KEY
+    );
+    this.logger.info('Price Aggregator service initialized', {
+      hasGemini: !!env.GEMINI_API_KEY
+    });
   }
 
   /**
@@ -278,17 +291,66 @@ export class MarketPriceService {
   }
 
   /**
-   * Get prices from Google Books
+   * Get prices from Google Books + Multi-Source Aggregator
+   * Enhanced to use web scraping from AbeBooks, Amazon, BookFinder
+   * AND Gemini's Google search capability
    */
   private async getBookPrices(analysis: ExpertAnalysis): Promise<MarketPriceResult | null> {
+    const isbn = analysis.extracted_data.isbn || '';
+    const title = analysis.extracted_data.title || '';
+    const author = analysis.extracted_data.author;
+
+    this.logger.info('Fetching book prices from multiple sources', {
+      isbn,
+      title,
+      author
+    });
+
+    // STRATEGY: Try aggregator first (most comprehensive), then fallback to Google Books API
+    
+    // 1. Try Price Aggregator (AbeBooks, Amazon, BookFinder, eBay Finding API, Gemini+Google)
+    if (this.priceAggregator) {
+      try {
+        const aggregatedPrices = await this.priceAggregator.aggregatePrices(isbn, title, author);
+        
+        if (aggregatedPrices && aggregatedPrices.count > 0) {
+          this.logger.info('Multi-source prices found', {
+            avgPrice: aggregatedPrices.average,
+            sources: aggregatedPrices.sources.length,
+            priceRange: `${aggregatedPrices.min}-${aggregatedPrices.max}`
+          });
+
+          return {
+            source: 'multi_source_aggregator',
+            estimated_value: aggregatedPrices.median, // Median is more robust than average
+            price_range_min: aggregatedPrices.min,
+            price_range_max: aggregatedPrices.max,
+            currency: aggregatedPrices.currency,
+            similar_items_count: aggregatedPrices.count,
+            confidence_score: this.calculateAggregatorConfidence(aggregatedPrices),
+            comparable_items: aggregatedPrices.sources.slice(0, 10).map(source => ({
+              title: `${title} (${source.condition})`,
+              price: source.price,
+              condition: source.condition,
+              url: source.url
+            }))
+          };
+        }
+      } catch (error: any) {
+        this.logger.warn('Price aggregator failed, falling back to Google Books', {
+          error: error.message
+        });
+      }
+    }
+
+    // 2. Fallback to Google Books API
     if (!this.booksService) return null;
 
-    // Convert to SmartAnalysisResult format
     const mockAnalysis: any = {
       extracted_data: analysis.extracted_data,
       market_identifiers: {
-        isbn_13: analysis.extracted_data.isbn,
-        isbn_10: analysis.extracted_data.isbn
+        isbn_13: isbn,
+        isbn_10: isbn
       }
     };
 
@@ -306,11 +368,11 @@ export class MarketPriceService {
 
     const min = prices[0];
     const max = prices[prices.length - 1];
-    const average = prices.reduce((sum, p) => sum + p, 0) / prices.length;
+    const median = prices[Math.floor(prices.length / 2)];
 
     return {
       source: 'google_books',
-      estimated_value: average,
+      estimated_value: median,
       price_range_min: min,
       price_range_max: max,
       currency: 'CAD',
@@ -325,12 +387,93 @@ export class MarketPriceService {
   }
 
   /**
+   * Calculate confidence score for aggregated prices
+   * Based on: number of sources, price consistency, data quality
+   */
+  private calculateAggregatorConfidence(aggregated: any): number {
+    let confidence = 0.5; // Base confidence
+
+    // More sources = higher confidence
+    if (aggregated.count >= 15) confidence += 0.3;
+    else if (aggregated.count >= 10) confidence += 0.2;
+    else if (aggregated.count >= 5) confidence += 0.1;
+
+    // Price consistency (low variance = higher confidence)
+    const priceRange = aggregated.max - aggregated.min;
+    const avgPrice = aggregated.average;
+    const variance = priceRange / avgPrice;
+
+    if (variance < 0.3) confidence += 0.15; // Very consistent pricing
+    else if (variance < 0.5) confidence += 0.1; // Moderately consistent
+    else if (variance < 1.0) confidence += 0.05; // Some variance
+
+    // Multiple source types increase confidence
+    const uniqueSources = new Set(aggregated.sources.map((s: any) => s.source));
+    if (uniqueSources.size >= 3) confidence += 0.1;
+    else if (uniqueSources.size >= 2) confidence += 0.05;
+
+    return Math.min(confidence, 0.95); // Cap at 95%
+  }
+
+  /**
    * Consolidate prices from multiple sources
+   * Enhanced to provide comprehensive price ranges and confidence levels
    */
   private consolidatePrices(
     results: MarketPriceResult[],
     analysis: ExpertAnalysis
   ): ConsolidatedMarketPrice {
+    this.logger.info('Consolidating prices from sources', {
+      sourceCount: results.length,
+      sources: results.map(r => r.source)
+    });
+
+    // Collect ALL prices from all sources for statistical analysis
+    const allPrices: number[] = [];
+    results.forEach(result => {
+      // Add the estimated value
+      allPrices.push(result.estimated_value);
+      
+      // Add comparable item prices if available
+      result.comparable_items.forEach(item => {
+        if (item.price > 0) {
+          allPrices.push(item.price);
+        }
+      });
+    });
+
+    // Sort for statistical calculations
+    const sortedPrices = allPrices.filter(p => p > 0).sort((a, b) => a - b);
+
+    if (sortedPrices.length === 0) {
+      // Fallback if no valid prices
+      const weightedValue = results.reduce(
+        (sum, r) => sum + (r.estimated_value * r.confidence_score),
+        0
+      ) / results.reduce((sum, r) => sum + r.confidence_score, 0);
+
+      return {
+        estimated_value: Math.round(weightedValue * 100) / 100,
+        price_range_min: Math.round(weightedValue * 0.8 * 100) / 100,
+        price_range_max: Math.round(weightedValue * 1.2 * 100) / 100,
+        currency: 'CAD',
+        confidence: 0.5,
+        sources_used: results.map(r => r.source),
+        market_insights: this.analyzeMarketInsights(results, analysis, weightedValue, 0),
+        comparable_sales: []
+      };
+    }
+
+    // ENHANCED STATISTICAL ANALYSIS
+    const min = sortedPrices[0];
+    const max = sortedPrices[sortedPrices.length - 1];
+    const median = sortedPrices[Math.floor(sortedPrices.length / 2)];
+    const average = sortedPrices.reduce((sum, p) => sum + p, 0) / sortedPrices.length;
+    
+    // Calculate percentiles for better range understanding
+    const p25 = sortedPrices[Math.floor(sortedPrices.length * 0.25)]; // 25th percentile
+    const p75 = sortedPrices[Math.floor(sortedPrices.length * 0.75)]; // 75th percentile
+
     // Weight each source by confidence
     const totalConfidence = results.reduce((sum, r) => sum + r.confidence_score, 0);
     const weightedValue = results.reduce(
@@ -338,21 +481,40 @@ export class MarketPriceService {
       0
     ) / totalConfidence;
 
-    // Get overall price range
-    const allMins = results.map(r => r.price_range_min).filter(p => p > 0);
-    const allMaxs = results.map(r => r.price_range_max).filter(p => p > 0);
+    // Use weighted value if reasonable, otherwise use median (more robust)
+    const finalEstimate = Math.abs(weightedValue - median) / median < 0.3 
+      ? weightedValue  // Within 30% of median
+      : median;        // Use median if weighted value is an outlier
 
-    const overallMin = allMins.length > 0 ? Math.min(...allMins) : 0;
-    const overallMax = allMaxs.length > 0 ? Math.max(...allMaxs) : 0;
-
-    // Average confidence weighted by number of comparable items
+    // Enhanced confidence calculation
     const totalItems = results.reduce((sum, r) => sum + r.similar_items_count, 0);
-    const weightedConfidence = results.reduce(
-      (sum, r) => sum + (r.confidence_score * r.similar_items_count),
-      0
-    ) / totalItems;
+    let enhancedConfidence = 0.5; // Base
 
-    // Collect all comparable sales
+    // Factor 1: Number of data sources
+    if (results.length >= 3) enhancedConfidence += 0.2;
+    else if (results.length >= 2) enhancedConfidence += 0.1;
+
+    // Factor 2: Total comparable items
+    if (totalItems >= 20) enhancedConfidence += 0.15;
+    else if (totalItems >= 10) enhancedConfidence += 0.1;
+    else if (totalItems >= 5) enhancedConfidence += 0.05;
+
+    // Factor 3: Price consistency (coefficient of variation)
+    const stdDev = Math.sqrt(
+      sortedPrices.reduce((sum, p) => sum + Math.pow(p - average, 2), 0) / sortedPrices.length
+    );
+    const cv = stdDev / average; // Coefficient of variation
+    if (cv < 0.2) enhancedConfidence += 0.15; // Very consistent
+    else if (cv < 0.4) enhancedConfidence += 0.1; // Moderately consistent
+    else if (cv < 0.6) enhancedConfidence += 0.05; // Some variance
+
+    // Factor 4: Source confidence scores
+    const avgSourceConfidence = totalConfidence / results.length;
+    enhancedConfidence += avgSourceConfidence * 0.1;
+
+    enhancedConfidence = Math.min(enhancedConfidence, 0.95); // Cap at 95%
+
+    // Collect all comparable sales with source attribution
     const allComparableSales = results.flatMap(result =>
       result.comparable_items.map(item => ({
         source: result.source,
@@ -363,24 +525,32 @@ export class MarketPriceService {
       }))
     );
 
-    // Sort by price and take top 15
+    // Sort by price and take representative sample across price range
     allComparableSales.sort((a, b) => b.price - a.price);
-    const topComparables = allComparableSales.slice(0, 15);
+    const topComparables = allComparableSales.slice(0, 20);
 
-    // Determine market insights based on data
+    // Determine market insights based on comprehensive data
     const market_insights = this.analyzeMarketInsights(
       results,
       analysis,
-      weightedValue,
+      finalEstimate,
       totalItems
     );
 
+    this.logger.info('Price consolidation complete', {
+      estimated_value: finalEstimate,
+      range: `${min}-${max}`,
+      median,
+      confidence: enhancedConfidence,
+      totalDataPoints: sortedPrices.length
+    });
+
     return {
-      estimated_value: Math.round(weightedValue * 100) / 100,
-      price_range_min: Math.round(overallMin * 100) / 100,
-      price_range_max: Math.round(overallMax * 100) / 100,
+      estimated_value: Math.round(finalEstimate * 100) / 100,
+      price_range_min: Math.round(min * 100) / 100,
+      price_range_max: Math.round(max * 100) / 100,
       currency: 'CAD',
-      confidence: Math.round(weightedConfidence * 100) / 100,
+      confidence: Math.round(enhancedConfidence * 100) / 100,
       sources_used: results.map(r => r.source),
       market_insights,
       comparable_sales: topComparables
