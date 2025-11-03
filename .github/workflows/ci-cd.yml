@@ -86,7 +86,7 @@ jobs:
       - name: Build project
         run: npm run build
 
-     - name: Deploy to Cloudflare Workers (Production)
+      - name: Deploy to Cloudflare Workers (Production)
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
