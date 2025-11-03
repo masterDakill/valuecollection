@@ -100,6 +100,12 @@ export class EbayService {
         );
       }
 
+      // If still 403, try Finding API (no OAuth required)
+      if (!response.ok && response.status === 403) {
+        console.warn('eBay Browse API 403, falling back to Finding API (no OAuth)');
+        return await this.searchUsingFindingAPI(searchTerms, item.id);
+      }
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`eBay API error: ${response.status} - ${errorText}`);
@@ -111,6 +117,72 @@ export class EbayService {
 
     } catch (error) {
       console.error('eBay search error:', error);
+      return [];
+    }
+  }
+
+  // Fallback to Finding API (older API, no OAuth required, just App ID)
+  private async searchUsingFindingAPI(keywords: string, itemId: number): Promise<RecentSale[]> {
+    try {
+      const findingBaseUrl = this.sandbox 
+        ? 'https://svcs.sandbox.ebay.com/services/search/FindingService/v1'
+        : 'https://svcs.ebay.com/services/search/FindingService/v1';
+
+      const params = new URLSearchParams({
+        'OPERATION-NAME': 'findCompletedItems',
+        'SERVICE-VERSION': '1.13.0',
+        'SECURITY-APPNAME': this.clientId,
+        'RESPONSE-DATA-FORMAT': 'JSON',
+        'REST-PAYLOAD': '',
+        'keywords': keywords,
+        'paginationInput.entriesPerPage': '100',
+        'sortOrder': 'EndTimeSoonest',
+        'itemFilter(0).name': 'SoldItemsOnly',
+        'itemFilter(0).value': 'true',
+        'itemFilter(1).name': 'Condition',
+        'itemFilter(1).value': 'Used'
+      });
+
+      const response = await fetch(`${findingBaseUrl}?${params}`);
+
+      if (!response.ok) {
+        console.error(`Finding API error: ${response.status}`);
+        return [];
+      }
+
+      const data = await response.json();
+      const searchResult = data.findCompletedItemsResponse?.[0]?.searchResult?.[0];
+      
+      if (!searchResult?.item) {
+        return [];
+      }
+
+      // Parse Finding API results into RecentSale format
+      return searchResult.item.map((ebayItem: any) => {
+        const sellingStatus = ebayItem.sellingStatus?.[0];
+        const price = sellingStatus?.currentPrice?.[0];
+        
+        const sale: RecentSale = {
+          id: 0,
+          item_id: itemId,
+          sale_platform: 'ebay',
+          sale_date: ebayItem.listingInfo?.[0]?.endTime?.[0] || new Date().toISOString(),
+          sale_price: price?.__value__ ? parseFloat(price.__value__) : undefined,
+          currency: price?.['@currencyId'] || 'CAD',
+          sold_condition: this.mapEbayCondition(ebayItem.condition?.[0]?.conditionDisplayName?.[0] || 'GOOD'),
+          sold_title: ebayItem.title?.[0]?.substring(0, 255),
+          sold_description: ebayItem.subtitle?.[0]?.substring(0, 500),
+          sold_item_url: ebayItem.viewItemURL?.[0],
+          similarity_score: this.calculateSimilarity(ebayItem.title?.[0] || ''),
+          verified_sale: true,
+          created_at: new Date().toISOString()
+        };
+        
+        return sale;
+      }).filter((sale: RecentSale) => sale.sale_price && sale.sale_price > 0);
+
+    } catch (error) {
+      console.error('Finding API error:', error);
       return [];
     }
   }
