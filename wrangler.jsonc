@@ -3,7 +3,7 @@
   "name": "valuecollection",
   "compatibility_date": "2024-10-01",
   "compatibility_flags": ["nodejs_compat"],
-  "pages_build_output_dir": "./dist",
+  "main": "dist/_worker.js",
 
   // Base de données D1 pour les collections - CONFIGURÉE (Cloudflare)
   "d1_databases": [
