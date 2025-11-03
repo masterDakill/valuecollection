@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "evaluateur-collection-pro",
+  "name": "valuecollection",
   "compatibility_date": "2024-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "pages_build_output_dir": "./dist",
